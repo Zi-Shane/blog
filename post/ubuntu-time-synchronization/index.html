@@ -1,0 +1,176 @@
+<!doctype html><html lang=en>
+<head>
+<title>
+Ubuntu與網路時間同步 ::
+Hello Friend — A simple theme for Hugo
+</title>
+<meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<meta name=description content="systemd-timesyncd的狀態出現Timed out無法自動和server同步時間 $ systemctl status systemd-timesyncd.service ● systemd-timesyncd.service - Network Time Synchronization Loaded: loaded (/lib/systemd/system/systemd-timesyncd.service; enabled; vendor preset: enabled) Active: active (running) since Thu 2020-09-03 22:46:43 CST; 3h 14min ago Docs: man:systemd-timesyncd.service(8) Main PID: 761 (systemd-timesyn) Status: &amp;quot;Idle.&amp;quot; Tasks: 2 (limit: 4915) CGroup: /system.slice/systemd-timesyncd.service # This file is part of systemd. └─761 /lib/systemd/systemd-timesyncd Sep 04 01:13:07 dmlab-server systemd-timesyncd[761]: Timed out waiting for reply from 91.189.94.4:123 (ntp.ubuntu.com).Sep 04 01:13:17 dmlab-server systemd-timesyncd[761]: Timed out waiting for reply from 91.">
+<meta name=keywords content>
+<meta name=robots content="noodp">
+<link rel=canonical href=/post/ubuntu-time-synchronization/>
+<link rel=stylesheet href=/assets/style.css>
+<link rel=stylesheet href=/style.css>
+<link rel=apple-touch-icon-precomposed sizes=144x144 href=/img/apple-touch-icon-144-precomposed.png>
+<link rel="shortcut icon" href=/img/favicon.png>
+<link href=/assets/fonts/Inter-Italic.woff2 rel=preload type=font/woff2 as=font crossorigin>
+<link href=/assets/fonts/Inter-Regular.woff2 rel=preload type=font/woff2 as=font crossorigin>
+<link href=/assets/fonts/Inter-Medium.woff2 rel=preload type=font/woff2 as=font crossorigin>
+<link href=/assets/fonts/Inter-MediumItalic.woff2 rel=preload type=font/woff2 as=font crossorigin>
+<link href=/assets/fonts/Inter-Bold.woff2 rel=preload type=font/woff2 as=font crossorigin>
+<link href=/assets/fonts/Inter-BoldItalic.woff2 rel=preload type=font/woff2 as=font crossorigin>
+<meta name=twitter:card content="summary">
+<meta name=twitter:title content="Ubuntu與網路時間同步">
+<meta name=twitter:description content="最近使用kubectl遇到時間不同步的問題，導致憑證時間對不上的錯誤，這邊紀錄一下如何設定將ubuntu與NTP Server同步">
+<meta property="og:title" content="Ubuntu與網路時間同步">
+<meta property="og:description" content="最近使用kubectl遇到時間不同步的問題，導致憑證時間對不上的錯誤，這邊紀錄一下如何設定將ubuntu與NTP Server同步">
+<meta property="og:type" content="article">
+<meta property="og:url" content="/post/ubuntu-time-synchronization/"><meta property="article:section" content="post">
+<meta property="article:published_time" content="2020-09-19T00:00:00+00:00">
+<meta property="article:modified_time" content="2020-09-19T00:00:00+00:00"><meta property="og:site_name" content="Hello Friend">
+</head>
+<body>
+<div class=container>
+<header class=header>
+<span class=header__inner>
+<a href=/ class=logo style=text-decoration:none>
+<span class=logo__mark><svg xmlns="http://www.w3.org/2000/svg" class="greater-icon" viewBox="0 0 44 44"><path fill="none" d="M15 8l14.729 14.382L15 35.367"/></svg>
+</span>
+<span class=logo__text>hello friend</span>
+<span class=logo__cursor></span>
+</a>
+<span class=header__right>
+<nav class=menu>
+<ul class="menu__inner menu__inner--desktop">
+<li><a href=/about>About</a></li>
+<li><a href=/showcase>Showcase</a></li>
+</ul>
+<ul class="menu__inner menu__inner--mobile">
+<li><a href=/about>About</a></li>
+<li><a href=/showcase>Showcase</a></li>
+</ul>
+</nav>
+<span class=menu-trigger><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M0 0h24v24H0z" fill="none"/><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+</span>
+<span class=theme-toggle><svg class="theme-toggler" width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M22 41c10.4934.0 19-8.5066 19-19C41 11.5066 32.4934 3 22 3 11.5066 3 3 11.5066 3 22s8.5066 19 19 19zM7 22C7 13.7157 13.7157 7 22 7V37C13.7157 37 7 30.2843 7 22z"/></svg>
+</span>
+</span>
+</span>
+</header>
+<div class=content>
+<div class=post>
+<h1 class=post-title>Ubuntu與網路時間同步</h1>
+<div class=post-meta>
+<span class=post-date>
+2020-09-19
+</span>
+<span class=post-author>— Written by Zi-Shane</span>
+</div>
+<span class=post-tags>
+<a href=/tags/linux/>#Linux</a>&nbsp;
+</span>
+<div class=post-content>
+<h2 id=systemd-timesyncd的狀態出現timed-out無法自動和server同步時間>systemd-timesyncd的狀態出現Timed out無法自動和server同步時間</h2>
+<pre tabindex=0><code>$ systemctl status systemd-timesyncd.service
+
+● systemd-timesyncd.service - Network Time Synchronization
+   Loaded: loaded (/lib/systemd/system/systemd-timesyncd.service; enabled; vendor preset: enabled)
+   Active: active (running) since Thu 2020-09-03 22:46:43 CST; 3h 14min ago
+     Docs: man:systemd-timesyncd.service(8)
+ Main PID: 761 (systemd-timesyn)
+   Status: &quot;Idle.&quot;
+    Tasks: 2 (limit: 4915)
+   CGroup: /system.slice/systemd-timesyncd.service
+#  This file is part of systemd.
+           └─761 /lib/systemd/systemd-timesyncd
+Sep 04 01:13:07 dmlab-server systemd-timesyncd[761]: Timed out waiting for reply from 91.189.94.4:123 (ntp.ubuntu.com).Sep 04 01:13:17 dmlab-server systemd-timesyncd[761]: Timed out waiting for reply from 91.189.91.157:123 (ntp.ubuntu.com).Sep 04 01:13:27 dmlab-server systemd-timesyncd[761]: Timed out waiting for reply from [2001:67c:1560:8003::c8]:123 (ntp.ubuntu.com).Sep 04 01:13:37 dmlab-server systemd-timesyncd[761]: Timed out waiting for reply from [2001:67c:1560:8003::c7]:123 (ntp.ubuntu.com).Sep 04 01:47:56 dmlab-server systemd-timesyncd[761]: Timed out waiting for reply from 91.189.89.199:123 (ntp.ubuntu.com).Sep 04 01:48:06 dmlab-server systemd-timesyncd[761]: Timed out waiting for reply from 91.189.91.157:123 (ntp.ubuntu.com).Sep 04 01:48:16 dmlab-server systemd-timesyncd[761]: Timed out waiting for reply from 91.189.94.4:123 (ntp.ubuntu.com).Sep 04 01:48:27 dmlab-server systemd-timesyncd[761]: Timed out waiting for reply from 91.189.89.198:123 (ntp.ubuntu.com).Sep 04 01:48:37 dmlab-server systemd-timesyncd[761]: Timed out waiting for reply from [2001:67c:1560:8003::c7]:123 (ntp.ubuntu.com).Sep 04 01:48:47 dmlab-server systemd-timesyncd[761]: Timed out waiting for reply from [2001:67c:1560:8003::c8]:123 (ntp.ubuntu.com).
+</code></pre><hr>
+<h2 id=解決方法>解決方法</h2>
+<h3 id=1-用timedatectl指令檢查目前的時間和timezone>1. 用<code>timedatectl</code>指令檢查目前的時間和timezone</h3>
+<pre tabindex=0><code>                      Local time: Thu 2020-09-03 17:35:02 CST
+                  Universal time: Thu 2020-09-03 09:35:02 UTC
+                        RTC time: Thu 2020-09-03 09:35:02    
+                       Time zone: Asia/Taipei (CST, +0800)
+       System clock synchronized: no
+systemd-timesyncd.service active: yes
+                 RTC in local TZ: no
+</code></pre><p>需要更改timezone可以用以下指令查詢和修改，台灣可以直接設<code>Asia/Taipei</code></p>
+<pre tabindex=0><code># list all timezone
+timedatectl list-timezones
+
+# change timezone
+sudo timedatectl set-timezone Asia/Taipei
+</code></pre><h3 id=2-指定新的-ntp-server>2. 指定新的 NTP Server</h3>
+<p>修改<code>/etc/systemd/timesyncd.conf</code>的NTP設定</p>
+<pre tabindex=0><code>sudo vim /etc/systemd/timesyncd.conf
+</code></pre><p>以下台灣ntp server可以選一個</p>
+<ul>
+<li>time.stdtime.gov.tw</li>
+<li>tock.stdtime.gov.tw</li>
+<li>watch.stdtime.gov.tw</li>
+<li>clock.stdtime.gov.tw</li>
+<li>tick.stdtime.gov.tw</li>
+</ul>
+<pre tabindex=0><code># /etc/systemd/timesyncd.conf
+
+[Time]
+NTP=watch.stdtime.gov.tw      # 指定一個新的server
+#NTP=
+#FallbackNTP=ntp.ubuntu.com
+#RootDistanceMaxSec=5
+#PollIntervalMinSec=32
+#PollIntervalMaxSec=2048
+</code></pre><h3 id=3-重啟-timesync-服務>3. 重啟 timesync 服務</h3>
+<pre tabindex=0><code>sudo systemctl restart systemd-timesyncd
+</code></pre><p>最後可以用<code>timedatectl</code>或<code>date</code>指令驗證
+<img src=https://i.imgur.com/tKAgRXH.png alt></p>
+</div>
+<div class=pagination>
+<div class=pagination__title>
+<span class=pagination__title-h>Read other posts</span>
+<hr>
+</div>
+<div class=pagination__buttons>
+<span class="button previous">
+<a href=/post/jupyter-on-vscode/>
+<span class=button__icon>←</span>
+<span class=button__text>在VSCode上使用jupyter notebook</span>
+</a>
+</span>
+<span class="button next">
+<a href=/post/example_posts/my-first-post/>
+<span class=button__text>My First Post</span>
+<span class=button__icon>→</span>
+</a>
+</span>
+</div>
+</div>
+<div id=disqus_thread></div>
+<script type=application/javascript>var disqus_config=function(){};(function(){if(["localhost","127.0.0.1"].indexOf(window.location.hostname)!=-1){document.getElementById('disqus_thread').innerHTML='Disqus comments not available by default when the website is previewed locally.';return}var b=document,a=b.createElement('script');a.async=!0,a.src='//zi-shane-github-io.disqus.com/embed.js',a.setAttribute('data-timestamp',+new Date),(b.head||b.body).appendChild(a)})()</script>
+<noscript>Please enable JavaScript to view the <a href=https://disqus.com/?ref_noscript>comments powered by Disqus.</a></noscript>
+<a href=https://disqus.com class=dsq-brlink>comments powered by <span class=logo-disqus>Disqus</span></a>
+</div>
+</div>
+<footer class=footer>
+<div class=footer__inner>
+<a href=/ class=logo style=text-decoration:none>
+<span class=logo__mark><svg xmlns="http://www.w3.org/2000/svg" class="greater-icon" viewBox="0 0 44 44"><path fill="none" d="M15 8l14.729 14.382L15 35.367"/></svg>
+</span>
+<span class=logo__text>hello friend</span>
+<span class=logo__cursor></span>
+</a>
+<div class=copyright>
+<span>© 2021 Powered by
+<a href=https://gohugo.io target=_blank rel=noopener>Hugo</a></span>
+<span>Theme created by
+<a href=https://twitter.com/panr target=_blank rel=noopener>panr</a></span>
+</div>
+</div>
+</footer>
+<script src=/assets/main.js></script>
+<script src=/assets/prism.js></script>
+</div>
+<script type=application/javascript>var doNotTrack=!1;doNotTrack||(function(a,e,f,g,b,c,d){a.GoogleAnalyticsObject=b,a[b]=a[b]||function(){(a[b].q=a[b].q||[]).push(arguments)},a[b].l=1*new Date,c=e.createElement(f),d=e.getElementsByTagName(f)[0],c.async=1,c.src=g,d.parentNode.insertBefore(c,d)}(window,document,'script','https://www.google-analytics.com/analytics.js','ga'),ga('create','UA-122716411-1','auto'),ga('send','pageview'))</script>
+</body>
+</html>

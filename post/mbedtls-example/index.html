@@ -1,0 +1,206 @@
+<!doctype html><html lang=en>
+<head>
+<title>
+mbedtls使用筆記 ::
+Hello Friend — A simple theme for Hugo
+</title>
+<meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<meta name=description content="目前論文在做MCU的開發，需要使用到mbedtls來做ECDSA跟ECDH，想說能不能在PC上的版本先測試過，再改MbedOS版本的程式碼就好，所以才研究怎麼讓mbedtls在Ubuntu的環境下也能使用。
+如果在MbedOS環境想要使用mbedtls的話，不需要額外安裝其他套件，可以直接call mbetls的API
+可以參考這個程式， 搭配官方API文件 - ecdsa.h File Reference
+ 下載 mbedtls 原始碼 在Ubuntu下使用的話要自己下載原始碼來編譯安裝到系統中
+mbedtls Github repo: https://github.com/ARMmbed/mbedtls
+直接下指令來下載
+git clone https://github.com/ARMmbed/mbedtls.git 目前的 Release 為 v2.27.0
+:::warning v3.0.0 開始mbedtls大幅修改，無法使用此文章的程式碼 :::
+checkout 到 release 版本的 tag
+git checkout tags/v2.27.0  安裝 mbedtls library :::info 測試過 v2.26.0 會報錯告知需要安裝 Python :::
+說明中有提到可以用 GUN make, CMake 或 Visual Studio 編譯，但我是使用 Ubuntu 所以這裡我會使用 GNU make 來編譯
+另外編譯過程會用到 python 3，如果沒裝的話可以先安裝，然後直接切換目錄到 mbedtls，執行 make 和 make install即可。
+cd mbedtls make # make install會將 # library複製到/usr/local/lib # include複製到/usr/local/include/mbedtls  make install 基本上到這裡就完成了，在mbedtls/programs資料夾下有範例程式可以參考 想了解程式碼的話，可以參考官方API文件。">
+<meta name=keywords content>
+<meta name=robots content="noodp">
+<link rel=canonical href=/post/mbedtls-example/>
+<link rel=stylesheet href=/assets/style.css>
+<link rel=stylesheet href=/style.css>
+<link rel=apple-touch-icon-precomposed sizes=144x144 href=/img/apple-touch-icon-144-precomposed.png>
+<link rel="shortcut icon" href=/img/favicon.png>
+<link href=/assets/fonts/Inter-Italic.woff2 rel=preload type=font/woff2 as=font crossorigin>
+<link href=/assets/fonts/Inter-Regular.woff2 rel=preload type=font/woff2 as=font crossorigin>
+<link href=/assets/fonts/Inter-Medium.woff2 rel=preload type=font/woff2 as=font crossorigin>
+<link href=/assets/fonts/Inter-MediumItalic.woff2 rel=preload type=font/woff2 as=font crossorigin>
+<link href=/assets/fonts/Inter-Bold.woff2 rel=preload type=font/woff2 as=font crossorigin>
+<link href=/assets/fonts/Inter-BoldItalic.woff2 rel=preload type=font/woff2 as=font crossorigin>
+<meta name=twitter:card content="summary">
+<meta name=twitter:title content="mbedtls使用筆記">
+<meta name=twitter:description content="在Ubuntu上使用mbedtls的API的方式">
+<meta property="og:title" content="mbedtls使用筆記">
+<meta property="og:description" content="在Ubuntu上使用mbedtls的API的方式">
+<meta property="og:type" content="article">
+<meta property="og:url" content="/post/mbedtls-example/"><meta property="article:section" content="post">
+<meta property="article:published_time" content="2021-08-27T00:00:00+00:00">
+<meta property="article:modified_time" content="2021-08-27T00:00:00+00:00"><meta property="og:site_name" content="Hello Friend">
+</head>
+<body>
+<div class=container>
+<header class=header>
+<span class=header__inner>
+<a href=/ class=logo style=text-decoration:none>
+<span class=logo__mark><svg xmlns="http://www.w3.org/2000/svg" class="greater-icon" viewBox="0 0 44 44"><path fill="none" d="M15 8l14.729 14.382L15 35.367"/></svg>
+</span>
+<span class=logo__text>hello friend</span>
+<span class=logo__cursor></span>
+</a>
+<span class=header__right>
+<nav class=menu>
+<ul class="menu__inner menu__inner--desktop">
+<li><a href=/about>About</a></li>
+<li><a href=/showcase>Showcase</a></li>
+</ul>
+<ul class="menu__inner menu__inner--mobile">
+<li><a href=/about>About</a></li>
+<li><a href=/showcase>Showcase</a></li>
+</ul>
+</nav>
+<span class=menu-trigger><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M0 0h24v24H0z" fill="none"/><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+</span>
+<span class=theme-toggle><svg class="theme-toggler" width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M22 41c10.4934.0 19-8.5066 19-19C41 11.5066 32.4934 3 22 3 11.5066 3 3 11.5066 3 22s8.5066 19 19 19zM7 22C7 13.7157 13.7157 7 22 7V37C13.7157 37 7 30.2843 7 22z"/></svg>
+</span>
+</span>
+</span>
+</header>
+<div class=content>
+<div class=post>
+<h1 class=post-title>mbedtls使用筆記</h1>
+<div class=post-meta>
+<span class=post-date>
+2021-08-27
+</span>
+<span class=post-author>— Written by Zi-Shane</span>
+</div>
+<span class=post-tags>
+<a href=/tags/mbedtls/>#mbedtls</a>&nbsp;
+</span>
+<div class=post-content>
+<p>目前論文在做MCU的開發，需要使用到mbedtls來做ECDSA跟ECDH，想說能不能在PC上的版本先測試過，再改MbedOS版本的程式碼就好，所以才研究怎麼讓mbedtls在Ubuntu的環境下也能使用。</p>
+<p>如果在MbedOS環境想要使用mbedtls的話，不需要額外安裝其他套件，可以直接call mbetls的API</p>
+<p>可以參考<a href=https://github.com/Zi-Shane/mbed-os-5-test/tree/mbedtls-test>這個程式</a>，
+搭配官方API文件 - <a href=https://tls.mbed.org/api/ecdsa_8h.html#aca644ee02921388fdc42eb06377f4b62>ecdsa.h File Reference</a></p>
+<hr>
+<h2 id=下載-mbedtls-原始碼>下載 mbedtls 原始碼</h2>
+<p>在Ubuntu下使用的話要自己下載原始碼來編譯安裝到系統中</p>
+<p>mbedtls Github repo: <a href=https://github.com/ARMmbed/mbedtls>https://github.com/ARMmbed/mbedtls</a></p>
+<p>直接下指令來下載</p>
+<pre tabindex=0><code class=language-git data-lang=git>git clone https://github.com/ARMmbed/mbedtls.git
+</code></pre><p>目前的 Release 為 v2.27.0</p>
+<p>:::warning
+v3.0.0 開始mbedtls大幅修改，無法使用此文章的程式碼
+:::</p>
+<p><img src=https://i.imgur.com/UWlsDrC.png alt></p>
+<p>checkout 到 release 版本的 tag</p>
+<pre tabindex=0><code class=language-git data-lang=git>git checkout tags/v2.27.0
+</code></pre><hr>
+<h2 id=安裝-mbedtls-library>安裝 mbedtls library</h2>
+<p>:::info
+測試過 v2.26.0 會報錯告知需要安裝 Python
+:::</p>
+<p>說明中有提到可以用 GUN make, CMake 或 Visual Studio 編譯，但我是使用 Ubuntu 所以這裡我會使用 GNU make 來編譯</p>
+<p>另外編譯過程會用到 python 3，如果沒裝的話可以先安裝，然後直接切換目錄到 mbedtls，執行 make 和 make install即可。</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-zsh data-lang=zsh>cd mbedtls
+make
+
+<span style=color:#75715e># make install會將</span>
+<span style=color:#75715e># library複製到/usr/local/lib</span>
+<span style=color:#75715e># include複製到/usr/local/include/mbedtls </span>
+make install
+</code></pre></div><p>基本上到這裡就完成了，在<code>mbedtls/programs</code>資料夾下有<a href=https://github.com/ARMmbed/mbedtls/tree/development/programs>範例程式</a>可以參考
+想了解程式碼的話，可以參考<a href=https://tls.mbed.org/api/modules.html>官方API文件</a>。</p>
+<hr>
+<h2 id=範例程式>範例程式</h2>
+<p>在<code>programs/</code>底下有一些範例程式可以參考，在下<code>make</code>的同時也會把這些範例編好，可以直接使用，舉<code>pkey/pk_sign</code>和<code>pkey/pk_verify</code>當例子</p>
+<ul>
+<li><code>pkey/pk_sign</code> : 使用private key簽章123.txt這個檔案</li>
+</ul>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=color:#75715e># usage: mbedtls_pk_sign &lt;key_file&gt; &lt;filename&gt;</span>
+programs/pkey/pk_sign ../prikey.pem ../123.txt
+
+  . Seeding the random number generator...
+  . Reading private key from <span style=color:#e6db74>&#39;../ECDSA_Keypairs/server/Copy_to_Keys/D4142434445464748.pem&#39;</span>
+  . Generating the SHA-256 signature
+  . Done <span style=color:#f92672>(</span>created <span style=color:#e6db74>&#34;../123.txt.sig&#34;</span><span style=color:#f92672>)</span>
+</code></pre></div><p>成功後會產生<code>123.txt.sig</code>這個檔案</p>
+<ul>
+<li><code>pkey/pk_verify</code> : 使用public key認證123.txt.sig簽章是否正確</li>
+</ul>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=color:#75715e># usage: mbedtls_pk_verify &lt;key_file&gt; &lt;filename&gt;</span>
+programs/pkey/pk_verify ../pubkey.pem ../123.txt
+
+  . Reading public key from <span style=color:#e6db74>&#39;../pubkey.pem&#39;</span>
+  . Verifying the SHA-256 signature
+  . OK <span style=color:#f92672>(</span>the signature is valid<span style=color:#f92672>)</span>
+</code></pre></div><p>需要將x509轉換到publickey可以使用openssl</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>openssl x509 -pubkey -noout -in  ECDSA_Keypairs/server/Copy_to_Certificates/D4142434445464748.pem &gt; pubkey.pem
+</code></pre></div><hr>
+<h2 id=編譯程式>編譯程式</h2>
+<p>編譯的時候gcc指令需要指定Library位置，會被放在<code>/usr/local/lib</code></p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>gcc -o test test.c -lmbedtls -lmbedcrypto -lmbedx509
+</code></pre></div><p>需要AES-GCM、ECDSA或ECDH的程式可以到我Github上下載。<a href=https://github.com/Zi-Shane/mbedtls-example>連結</a></p>
+<hr>
+<p>參考資料：</p>
+<ul>
+<li>關於public key和private key的格式
+<a href=https://tls.mbed.org/kb/cryptography/asn1-key-structures-in-der-and-pem>https://tls.mbed.org/kb/cryptography/asn1-key-structures-in-der-and-pem</a></li>
+<li>library
+<a href=https://www.cs.dartmouth.edu/~campbell/cs50/buildlib.html>https://www.cs.dartmouth.edu/~campbell/cs50/buildlib.html</a></li>
+</ul>
+<hr>
+</div>
+<div class=pagination>
+<div class=pagination__title>
+<span class=pagination__title-h>Read other posts</span>
+<hr>
+</div>
+<div class=pagination__buttons>
+<span class="button previous">
+<a href=/post/telegram-bot-azure/>
+<span class=button__icon>←</span>
+<span class=button__text>Deploy Telegram Bot to Azure</span>
+</a>
+</span>
+<span class="button next">
+<a href=/post/create-gh-pages/>
+<span class=button__text>在GitHub上建立一個自己的部落格</span>
+<span class=button__icon>→</span>
+</a>
+</span>
+</div>
+</div>
+<div id=disqus_thread></div>
+<script type=application/javascript>var disqus_config=function(){};(function(){if(["localhost","127.0.0.1"].indexOf(window.location.hostname)!=-1){document.getElementById('disqus_thread').innerHTML='Disqus comments not available by default when the website is previewed locally.';return}var b=document,a=b.createElement('script');a.async=!0,a.src='//zi-shane-github-io.disqus.com/embed.js',a.setAttribute('data-timestamp',+new Date),(b.head||b.body).appendChild(a)})()</script>
+<noscript>Please enable JavaScript to view the <a href=https://disqus.com/?ref_noscript>comments powered by Disqus.</a></noscript>
+<a href=https://disqus.com class=dsq-brlink>comments powered by <span class=logo-disqus>Disqus</span></a>
+</div>
+</div>
+<footer class=footer>
+<div class=footer__inner>
+<a href=/ class=logo style=text-decoration:none>
+<span class=logo__mark><svg xmlns="http://www.w3.org/2000/svg" class="greater-icon" viewBox="0 0 44 44"><path fill="none" d="M15 8l14.729 14.382L15 35.367"/></svg>
+</span>
+<span class=logo__text>hello friend</span>
+<span class=logo__cursor></span>
+</a>
+<div class=copyright>
+<span>© 2021 Powered by
+<a href=https://gohugo.io target=_blank rel=noopener>Hugo</a></span>
+<span>Theme created by
+<a href=https://twitter.com/panr target=_blank rel=noopener>panr</a></span>
+</div>
+</div>
+</footer>
+<script src=/assets/main.js></script>
+<script src=/assets/prism.js></script>
+</div>
+<script type=application/javascript>var doNotTrack=!1;doNotTrack||(function(a,e,f,g,b,c,d){a.GoogleAnalyticsObject=b,a[b]=a[b]||function(){(a[b].q=a[b].q||[]).push(arguments)},a[b].l=1*new Date,c=e.createElement(f),d=e.getElementsByTagName(f)[0],c.async=1,c.src=g,d.parentNode.insertBefore(c,d)}(window,document,'script','https://www.google-analytics.com/analytics.js','ga'),ga('create','UA-122716411-1','auto'),ga('send','pageview'))</script>
+</body>
+</html>
