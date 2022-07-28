@@ -1,0 +1,311 @@
+<!doctype html><html lang=en><head><title>使用Golang來寫一個RESTful API ::
+Hello Friend — A simple theme for Hugo</title><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=description content="我的程式架構如下圖所示，Client可以通過api來讀寫資料庫中的資料。這篇文章主要是討論backend的部分要如何實現。
+工具 Golang gorilla/mux: HTTP router gorm: ORM library for Golang gin: HTTP web framework MariaDB Database的部分採用mariadb，建議使用docker-compose來架設，這裡有寫好的docker-compose設定（mariadb-phpmyadmin），phpmyadmin也這串好了，可以依自己的需求進行修改（image, username, password&amp;hellip;），移動到mariadb-phpmyadmin資料夾下docker-compose up -d就完成mariadb的架設了 net/http golang 內建的套件，網路上可以查到蠻多相關資料的，在使用過程中發現設計api的route有些不方便，例如：
+我想要設計一個route，可以指定id來GET該筆資料，net/http沒辦法做到把url中的參數當成變數的功能，因此api可能要設計成這樣
+api/language/1
+api/language/2
+api/language/3
+&amp;hellip;.
+api/language/10
+因此查到了gorilla/mux這個套件，可以解決我的問題，透過下面這樣的方式，把url中的id這個位置當作input來處理
+api/language/{id}
+net/http + gorilla/mux + gorm 安裝套件 go get -u github.com/gorilla/mux go get -u gorm.io/gorm 程式碼架構 程式碼架構參考這篇文章，介紹的蠻詳細的。 而本文主要是多了資料庫連線的部分，我處理的方式是把連線資訊獨立出來(database資料夾)，並使用gorm讀資料庫(services資料夾)。而完成的程式碼可以到這下載，設定好環境變數和databsase(將nation.zip自phpmyadmin匯入資料庫)就可以正常執行。
+controllers 處理邏輯 routes 處理API路由 services 讀資料庫 database 與資料庫連線 . |-- routes | |-- api-routes.go | `-- route-utils.go |-- controllers | |-- api-controller."><meta name=keywords content><meta name=robots content="noodp"><link rel=canonical href=/post/golang-restful-api/><link rel=stylesheet href=/assets/style.css><link rel=stylesheet href=/style.css><link rel=apple-touch-icon-precomposed sizes=144x144 href=/img/apple-touch-icon-144-precomposed.png><link rel="shortcut icon" href=/img/favicon.png><link href=/assets/fonts/Inter-Italic.woff2 rel=preload type=font/woff2 as=font crossorigin><link href=/assets/fonts/Inter-Regular.woff2 rel=preload type=font/woff2 as=font crossorigin><link href=/assets/fonts/Inter-Medium.woff2 rel=preload type=font/woff2 as=font crossorigin><link href=/assets/fonts/Inter-MediumItalic.woff2 rel=preload type=font/woff2 as=font crossorigin><link href=/assets/fonts/Inter-Bold.woff2 rel=preload type=font/woff2 as=font crossorigin><link href=/assets/fonts/Inter-BoldItalic.woff2 rel=preload type=font/woff2 as=font crossorigin><meta name=twitter:card content="summary"><meta name=twitter:title content="使用Golang來寫一個RESTful API"><meta name=twitter:description content="使用Golang寫RESTful API套件使用紀錄"><meta property="og:title" content="使用Golang來寫一個RESTful API"><meta property="og:description" content="使用Golang寫RESTful API套件使用紀錄"><meta property="og:type" content="article"><meta property="og:url" content="/post/golang-restful-api/"><meta property="article:section" content="post"><meta property="article:published_time" content="2021-12-14T00:00:00+00:00"><meta property="article:modified_time" content="2021-12-14T00:00:00+00:00"><meta property="og:site_name" content="Hello Friend"></head><body><div class=container><header class=header><span class=header__inner><a href=/ class=logo style=text-decoration:none><span class=logo__mark><svg xmlns="http://www.w3.org/2000/svg" class="greater-icon" viewBox="0 0 44 44"><path fill="none" d="M15 8l14.729 14.382L15 35.367"/></svg></span><span class=logo__text>hello friend</span>
+<span class=logo__cursor></span></a>
+<span class=header__right><nav class=menu><ul class="menu__inner menu__inner--desktop"><li><a href=/about>About</a></li><li><a href=/tags>Tags</a></li></ul><ul class="menu__inner menu__inner--mobile"><li><a href=/about>About</a></li><li><a href=/tags>Tags</a></li></ul></nav><span class=menu-trigger><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M0 0h24v24H0z" fill="none"/><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg></span><span class=theme-toggle><svg class="theme-toggler" width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M22 41c10.4934.0 19-8.5066 19-19C41 11.5066 32.4934 3 22 3 11.5066 3 3 11.5066 3 22s8.5066 19 19 19zM7 22C7 13.7157 13.7157 7 22 7V37C13.7157 37 7 30.2843 7 22z"/></svg></span></span></span></header><div class=content><div class=post><h1 class=post-title>使用Golang來寫一個RESTful API</h1><div class=post-meta><span class=post-date>2021-12-14</span>
+<span class=post-author>— Written by Zi-Shane</span></div><span class=post-tags><a href=/tags/golang/>#Golang</a>&nbsp;</span><div class=post-content><p>我的程式架構如下圖所示，Client可以通過api來讀寫資料庫中的資料。這篇文章主要是討論backend的部分要如何實現。</p><p><img src=https://i.imgur.com/lNeXLJZ.png alt></p><hr><h2 id=工具>工具</h2><ul><li>Golang<ul><li><a href=https://github.com/gorilla/mux>gorilla/mux</a>: HTTP router</li><li><a href=https://github.com/go-gorm/gorm>gorm</a>: ORM library for Golang</li><li><a href=https://github.com/gin-gonic/gin>gin</a>: HTTP web framework</li></ul></li><li>MariaDB<ul><li>Database的部分採用mariadb，建議使用docker-compose來架設，<a href=https://github.com/Zi-Shane/docker-compose-files>這裡有寫好的docker-compose設定（mariadb-phpmyadmin）</a>，phpmyadmin也這串好了，可以依自己的需求進行修改（image, username, password&mldr;），移動到<code>mariadb-phpmyadmin</code>資料夾下<code>docker-compose up -d</code>就完成mariadb的架設了</li></ul></li></ul><hr><h2 id=nethttp>net/http</h2><p>golang 內建的套件，網路上可以查到蠻多相關資料的，在使用過程中發現設計api的route有些不方便，例如：</p><p>我想要設計一個route，可以指定id來<code>GET</code>該筆資料，<code>net/http</code>沒辦法做到把url中的參數當成變數的功能，因此api可能要設計成這樣</p><p><code>api/language/1</code><br><code>api/language/2</code><br><code>api/language/3</code><br>&mldr;.<br><code>api/language/10</code></p><p>因此查到了<code>gorilla/mux</code>這個套件，可以解決我的問題，透過下面這樣的方式，把url中的id這個位置當作input來處理</p><p><code>api/language/{id}</code></p><hr><h2 id=nethttp--gorillamux--gorm>net/http + gorilla/mux + gorm</h2><h4 id=安裝套件>安裝套件</h4><pre tabindex=0><code>go get -u github.com/gorilla/mux
+go get -u gorm.io/gorm
+</code></pre><h4 id=程式碼架構>程式碼架構</h4><p>程式碼架構參考<a href=https://medium.com/skyler-record/go-%E5%AF%A6%E4%BD%9C-restful-api-2a32210adeaf>這篇文章</a>，介紹的蠻詳細的。
+而本文主要是多了資料庫連線的部分，我處理的方式是把連線資訊獨立出來(<code>database</code>資料夾)，並使用<code>gorm</code>讀資料庫(<code>services</code>資料夾)。而完成的程式碼可以<a href=https://github.com/Zi-Shane/api-project/tree/dev-mux>到這下載</a>，設定好環境變數和databsase(將<code>nation.zip</code>自phpmyadmin匯入資料庫)就可以正常執行。</p><ul><li><code>controllers</code> 處理邏輯</li><li><code>routes</code> 處理API路由</li><li><code>services</code> 讀資料庫</li><li><code>database</code> 與資料庫連線</li></ul><pre tabindex=0><code>.
+|-- routes
+|   |-- api-routes.go
+|   `-- route-utils.go
+|-- controllers
+|   |-- api-controller.go
+|   `-- controller-utils.go
+|-- database
+|   `-- database.go
+|-- services
+|   `-- ReadLanguage.go
+|-- go.mod
+|-- go.sum
+`-- main.go
+</code></pre><h4 id=1-設定路由-get-apilanguageid>1. 設定路由 <code>GET api/language/:id</code></h4><p><code>main.go</code>為專案起點，呼叫<code>routes/route-utils.go</code>的<code>routes.NewRouter()</code>以建立<code>routes/api-routes.go</code>中定義的API的路由</p><div class=collapsable-code><input id=712936584 type=checkbox>
+<label for=712936584><span class=collapsable-code__language>go</span>
+<span class=collapsable-code__title>main.go</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-go><code>
+package main
+
+import (
+	routes &#34;api/routes&#34;
+	&#34;net/http&#34;
+)
+
+func main() {
+	router := routes.NewRouter()         // create a mux Router
+	http.ListenAndServe(&#34;:3000&#34;, router) // start server
+}
+</code></pre></div><div class=collapsable-code><input id=276314598 type=checkbox>
+<label for=276314598><span class=collapsable-code__language>go</span>
+<span class=collapsable-code__title>routes/route-utils.go</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-go><code>
+package routes
+
+import (
+	&#34;fmt&#34;
+	&#34;net/http&#34;
+
+	&#34;github.com/gorilla/mux&#34;
+)
+
+type Route struct {
+	Method     string
+	Pattern    string
+	Handler    http.HandlerFunc
+	Middleware mux.MiddlewareFunc
+}
+
+var routes []Route
+
+func register(method, pattern string, handler http.HandlerFunc, middleware mux.MiddlewareFunc) {
+	routes = append(routes, Route{method, pattern, handler, middleware})
+	fmt.Println(&#34;Route: &#34;, pattern)
+}
+
+// Bind HandlerFunc to Routes
+func NewRouter() *mux.Router {
+	r := mux.NewRouter()
+	for _, route := range routes {
+		r.Methods(route.Method).
+			Path(route.Pattern).
+			Handler(route.Handler)
+		if route.Middleware != nil {
+			r.Use(route.Middleware)
+		}
+	}
+	return r
+}
+</code></pre></div><p>設定當request打到<code>GET /api/language/{id}</code>時，要呼叫的HandlerFunc來處理request。
+init()是在package中最先執行的部分，將綁定的部分放在<code>init()</code>以確保在<code>main.go</code>中call<code>NewRouter()</code>時，HandlerFunc和Routes先會綁定在一起才被加到Router之上。</p><div class=collapsable-code><input id=748165293 type=checkbox>
+<label for=748165293><span class=collapsable-code__language>go</span>
+<span class=collapsable-code__title>routes/api-routes.go</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-go><code>
+package routes
+
+import (
+	&#34;api/controllers&#34;
+)
+
+// Configure of API Route
+func init() {
+	register(&#34;GET&#34;, &#34;/api/language/{id}&#34;, controllers.GetLanguage, nil)
+}
+</code></pre></div><hr><h2 id=設計-route-對應的-handler-function>設計 Route 對應的 Handler Function</h2><p>HandlerFunc主要負責處理Request，若是需要讀取資料庫就會呼叫<code>services</code>中的function，並回傳Response</p><div class=collapsable-code><input id=659748123 type=checkbox>
+<label for=659748123><span class=collapsable-code__language>go</span>
+<span class=collapsable-code__title>controllers/api-controller.go</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-go><code>
+package controllers
+
+import (
+	&#34;api/database&#34;
+	&#34;api/services&#34;
+	&#34;net/http&#34;
+
+	&#34;github.com/gorilla/mux&#34;
+)
+
+// HandlerFunc of `GET /api/language/{id}`
+func GetLanguage(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)   // 獲取url參數
+	queryId := vars[&#34;id&#34;] // 獲取{id}
+
+	// Call function from `services` to get data
+	var languages []database.Languages = services.ReadLanguage(queryId)
+
+	// Response data to Client
+	response := ApiResponse{&#34;200&#34;, languages}
+	ResponseWithJson(w, http.StatusOK, response)
+}
+</code></pre></div><p>而Response的內容為一個json的格式，透過自訂義的<code>ResponseWithJson()</code>來將struct轉換成json</p><div class=collapsable-code><input id=314769528 type=checkbox>
+<label for=314769528><span class=collapsable-code__language>go</span>
+<span class=collapsable-code__title>ccontrollers/controller-utils.go</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-go><code>
+package controllers
+
+import (
+	&#34;encoding/json&#34;
+	&#34;net/http&#34;
+)
+
+type ApiResponse struct {
+	ResultCode    string
+	ResultMessage interface{}
+}
+
+func ResponseWithJson(w http.ResponseWriter, code int, payload interface{}) {
+	response, _ := json.Marshal(payload)
+	w.Header().Set(&#34;Content-Type&#34;, &#34;application/json&#34;)
+	w.WriteHeader(code)
+	w.Write(response)
+}
+</code></pre></div><hr><h2 id=讀資料庫>讀資料庫</h2><p><code>database/database.go</code>用來建立與databse的連線，連線資訊被放在環境變數中，格式為<code>user:password@tcp(ip:port)/database-name</code>。</p><div class=collapsable-code><input id=184397652 type=checkbox>
+<label for=184397652><span class=collapsable-code__language>go</span>
+<span class=collapsable-code__title>database/database.go</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-go><code>
+package database
+
+import (
+	&#34;os&#34;
+	&#34;time&#34;
+
+	&#34;gorm.io/driver/mysql&#34;
+	&#34;gorm.io/gorm&#34;
+)
+
+type Languages struct {
+	Language_id int
+	Language    string
+}
+
+var DB *gorm.DB
+
+func init() {
+	// dsn format: &#34;user:password@tcp(ip:port)/db&#34;
+	// example: &#34;user:password@tcp(127.0.0.1:3306)/nation&#34;
+	dsn := os.Getenv(&#34;DB_CONN&#34;)
+	var err error
+	DB, err = gorm.Open(mysql.Open(dsn), &amp;gorm.Config{})
+	if err != nil {
+		panic(&#34;failed to connect database&#34;)
+	}
+
+	sqlDB, _ := DB.DB()
+
+	// SetMaxIdleConns sets the maximum number of connections in the idle connection pool.
+	sqlDB.SetMaxIdleConns(10)
+
+	// SetMaxOpenConns sets the maximum number of open connections to the database.
+	sqlDB.SetMaxOpenConns(100)
+
+	// SetConnMaxLifetime sets the maximum amount of time a connection may be reused.
+	//sqlDB.SetConnMaxLifetime(time.Hour)
+
+	DB.AutoMigrate(&amp;Languages{})
+}
+</code></pre></div><p><code>services/ReadLanguage.go</code>的<code>ReadLanguage()</code>使用grom執行SQL的查詢指令。</p><p>至於connection關閉的問題，github上有對於這個問題的討論，所以本文才會設計將資料庫連線的部分獨立出來，每次處理Request時重複使用已經建立的連線。</p><ul><li>GORM close() <a href=https://github.com/go-gorm/gorm/issues/3145>issue</a></li></ul><div class=collapsable-code><input id=639812754 type=checkbox>
+<label for=639812754><span class=collapsable-code__language>go</span>
+<span class=collapsable-code__title>services/ReadLanguage.go</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-go><code>
+package services
+
+import &#34;api/database&#34;
+
+func ReadLanguage(id string) []database.Languages {
+	var languages []database.Languages
+	// SELECT * FROM language WHERE id=1
+	database.DB.Find(&amp;languages, id)
+
+	return languages
+}
+</code></pre></div><hr><h2 id=執行程式>執行程式</h2><h4 id=執行maingo>執行main.go</h4><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-shell data-lang=shell><span style=display:flex><span>go run main.go
+</span></span></code></pre></div><h4 id=或是先build成binary再執行>或是先build成binary再執行</h4><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-shell data-lang=shell><span style=display:flex><span>go build -o app
+</span></span><span style=display:flex><span>./app
+</span></span></code></pre></div><hr><h2 id=gin和gorillamux差異><code>Gin</code>和<code>gorilla/mux</code>差異</h2><p>這裡找到一篇<a href=https://yushuanhsieh.github.io/post/2020-01-21-golang-router/>比較各種golang常見的Web Framework</a>，主要差別應該在於路由的比對上兩者使用的資料結構不同，Gin在速度上會更快一些。
+此外<code>gorilla/mux</code>僅是HTTP Router，而<code>Gin</code>為Web Framework提供了更多開發後端應用會使用到的功能。</p><hr><h2 id=用gin取代gorillamux>用Gin取代gorilla/mux</h2><p>這裡開始使用<code>Gin</code>來改寫剛剛的程式，程式碼的架構相同，只需要把<code>gorilla/mux</code>和<code>net/http</code>的部分改成<code>Gin</code>提供的功能取代即可，會改動到的有以下幾處：</p><ul><li>main()</li><li>routes/*</li><li>controllers/*</li></ul><p>我是依照github上的範例改寫的，也可以自己先試看看再參考我的程式碼～<br>完整程式碼在<a href=https://github.com/Zi-Shane/api-project/tree/dev>這邊</a></p><hr><h2 id=修改maingo>修改main.go</h2><p><code>main()</code>中，改成<code>Gin</code>的route和啟動Server的函數，取代前面使用<code>mux</code>和<code>net/http</code>的部分</p><div class=collapsable-code><input id=843172569 type=checkbox>
+<label for=843172569><span class=collapsable-code__language>go</span>
+<span class=collapsable-code__title>main.go</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-go><code>
+package main
+
+import (
+	&#34;api/routes&#34;
+)
+
+func main() {
+	router := routes.NewRouter()
+	// router.TrustedPlatform = gin.PlatformCloudflare
+	router.Run(&#34;:3000&#34;) // listen and serve on 0.0.0.0:8080
+}
+</code></pre></div><hr><h2 id=修改routes>修改Routes</h2><p><code>Route</code>這個struct中，原本使用<code>net/http</code>的<code>HandlerFunc</code>，這裡改用<code>gin.HandlerFunc</code></p><p><code>NewRoute()</code>的部分，把原本回傳的參數(<code>*mux.Router</code>)改成的<code>*gin.Engine</code></p><p>hint: Middleware的部分暫時略過，因為這個程式很簡單不需要使用到它</p><div class=collapsable-code><input id=528196374 type=checkbox>
+<label for=528196374><span class=collapsable-code__language>go</span>
+<span class=collapsable-code__title>routes/route-utils.go</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-go><code>
+package routes
+
+import (
+	&#34;github.com/gin-gonic/gin&#34;
+)
+
+type Route struct {
+	Method  string
+	Pattern string
+	Handler gin.HandlerFunc
+}
+
+var routes []Route
+
+func register(method, pattern string, handler gin.HandlerFunc) {
+	routes = append(routes, Route{method, pattern, handler})
+}
+
+// Bind HandlerFunc to Routes
+func NewRouter() *gin.Engine {
+	r := gin.Default()
+	for _, route := range routes {
+		r.Handle(route.Method, route.Pattern, route.Handler)
+	}
+
+	return r
+}
+</code></pre></div><p>這裡也先把Middleware的部分刪掉</p><div class=collapsable-code><input id=673145892 type=checkbox>
+<label for=673145892><span class=collapsable-code__language>go</span>
+<span class=collapsable-code__title>routes/api-routes.go</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-go><code>
+package routes
+
+import (
+	&#34;api/controllers&#34;
+)
+
+// Configure of API Route
+func init() {
+	register(&#34;GET&#34;, &#34;/api/language/:id&#34;, controllers.GetLanguage)
+}
+</code></pre></div><hr><h2 id=修改controllers>修改Controllers</h2><p>因為要把GetLanguage變成<code>gin.HandlerFunc</code>所以取參數(id)也改成gin提供的方法。</p><p>而回傳給client的json，Gin也有內建的函數(<code>JSON()</code>)可以直接使用取代前面自己定義的<code>ResponseWithJson()</code></p><div class=collapsable-code><input id=573684129 type=checkbox>
+<label for=573684129><span class=collapsable-code__language>go</span>
+<span class=collapsable-code__title>controllers/api-controller.go</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-go><code>
+package controllers
+
+import (
+	&#34;api/database&#34;
+	&#34;api/services&#34;
+	&#34;os&#34;
+
+	&#34;github.com/gin-gonic/gin&#34;
+)
+
+// HandlerFunc of `GET /api/language/{id}`
+func GetLanguage(c *gin.Context) {
+	queryId := c.Param(&#34;id&#34;) // 獲取url參數
+
+	// Call function from `services` to get data
+	var languages []database.Languages = services.ReadLanguage(queryId)
+
+	// Response data to Client
+	c.JSON(200, gin.H{
+		&#34;result&#34;: languages,
+	})
+}
+</code></pre></div><hr><h2 id=執行程式-1>執行程式</h2><p>我是在VSCode中執行，成功的話會看到像這樣的畫面
+<img src=https://i.imgur.com/unfTUzT.png alt></p><p>最後提一下，當執行程式的時候會看到第一行的Warning，這個其實是debug mode的關係，其實不用理他沒問題喔！</p><p>至於要怎麼把go.mod裡面的<code>gorilla/mux</code>刪掉？
+只要執行<code>go mod tidy</code>就會自動把沒用到的dependencies安全的清掉了喔！</p><pre tabindex=0><code>go mod tidy
+</code></pre><hr><p>到這裡大致介紹了<code>gorilla/mux</code>、<code>Gin</code>、<code>grom</code>的使用和差異。下篇將介紹部署到kubernetes上。</p><h2 id=參考資料>參考資料:</h2><ul><li><a href=https://medium.com/skyler-record/go-%E5%AF%A6%E4%BD%9C-restful-api-2a32210adeaf>https://medium.com/skyler-record/go-實作-restful-api-2a32210adeaf</a></li><li><a href=https://yushuanhsieh.github.io/post/2020-01-21-golang-router/>https://yushuanhsieh.github.io/post/2020-01-21-golang-router/</a></li><li><a href=https://go.dev/blog/using-go-modules#TOC_7.>https://go.dev/blog/using-go-modules#TOC_7.</a></li></ul></div><div class=pagination><div class=pagination__title><span class=pagination__title-h>Read other posts</span><hr></div><div class=pagination__buttons><span class="button previous"><a href=/post/golang-restful-api-part2/><span class=button__icon>←</span>
+<span class=button__text>使用Golang來寫一個RESTful API - Part2</span></a></span>
+<span class="button next"><a href=/post/telegram-bot-azure/><span class=button__text>Deploy Telegram Bot to Azure</span>
+<span class=button__icon>→</span></a></span></div></div><div id=disqus_thread></div><script type=application/javascript>window.disqus_config=function(){},function(){if(["localhost","127.0.0.1"].indexOf(window.location.hostname)!=-1){document.getElementById("disqus_thread").innerHTML="Disqus comments not available by default when the website is previewed locally.";return}var t=document,e=t.createElement("script");e.async=!0,e.src="//zi-shane-github-io.disqus.com/embed.js",e.setAttribute("data-timestamp",+new Date),(t.head||t.body).appendChild(e)}()</script><noscript>Please enable JavaScript to view the <a href=https://disqus.com/?ref_noscript>comments powered by Disqus.</a></noscript><a href=https://disqus.com class=dsq-brlink>comments powered by <span class=logo-disqus>Disqus</span></a></div></div><footer class=footer><div class=footer__inner><a href=/ class=logo style=text-decoration:none><span class=logo__mark><svg xmlns="http://www.w3.org/2000/svg" class="greater-icon" viewBox="0 0 44 44"><path fill="none" d="M15 8l14.729 14.382L15 35.367"/></svg></span><span class=logo__text>hello friend</span>
+<span class=logo__cursor></span></a><div class=copyright><span>© 2022 Powered by
+<a href=https://gohugo.io target=_blank rel=noopener>Hugo</a></span>
+<span>Theme created by
+<a href=https://twitter.com/panr target=_blank rel=noopener>panr</a></span></div></div></footer><script src=/assets/main.js></script>
+<script src=/assets/prism.js></script></div><script type=application/javascript>var doNotTrack=!1;doNotTrack||(function(e,t,n,s,o,i,a){e.GoogleAnalyticsObject=o,e[o]=e[o]||function(){(e[o].q=e[o].q||[]).push(arguments)},e[o].l=1*new Date,i=t.createElement(n),a=t.getElementsByTagName(n)[0],i.async=1,i.src=s,a.parentNode.insertBefore(i,a)}(window,document,"script","https://www.google-analytics.com/analytics.js","ga"),ga("create","UA-122716411-1","auto"),ga("send","pageview"))</script></body></html>

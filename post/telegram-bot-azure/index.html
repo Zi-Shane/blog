@@ -1,0 +1,166 @@
+<!doctype html><html lang=en><head><title>Deploy Telegram Bot to Azure ::
+Hello Friend — A simple theme for Hugo</title><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=description content="這篇文章會用telegram-bot-api這個套件在github上的範例程式（是一個echo server），最後把部署到Azure的AKS上去
+Create your Telegram Bot Build container image Create a Registry on Azure Push container image to Azure Container Registry(ACR) Create a k8s cluster Deploy image to k8s Future work Create your Telegram Bot 如果到google搜尋的話，第一個看到應該是這個套件telegram-bot-api，他算是一個把Telegram Bot API文件中的method包好，讓你可以直接call他寫好的function，幫助你快速做出Bot的套件。
+仔細去看code會發現，他其實會幫你產生Request去跟Telegram Bot API要資料回來
+以getUpdate為例，從程式碼對照官方API文件(getUpdate)可以看到，他們是一樣的東西
+官方API文件(getUpdate)
+套件中的GetUpdate函數
+這篇文章會用github給的範例程式，這是一個echo server，最後要部署到Azure的AKS上去
+首先，安裝套件
+First, ensure the library is installed and up to date by running go get -u github.com/go-telegram-bot-api/telegram-bot-api.
+改好TOKEN之後，可以跑看看這個程式，再到Telegram上發訊息給你的Bot，Bot就會回覆相同的訊息給你
+至於TOKEN我自己是把它存在一個.env檔案中，再把他ignore掉才不會不小心上傳到github上去，需要的話可以直接使用下面這段程式碼，主要使改成從環境變數來讀取TOKEN
+.env TELEGRAM_APITOKEN=123456:yaaaaaaaaaaa go app.go package main import ( &amp;#34;log&amp;#34; &amp;#34;os&amp;#34; tgbotapi &amp;#34;github."><meta name=keywords content><meta name=robots content="noodp"><link rel=canonical href=/post/telegram-bot-azure/><link rel=stylesheet href=/assets/style.css><link rel=stylesheet href=/style.css><link rel=apple-touch-icon-precomposed sizes=144x144 href=/img/apple-touch-icon-144-precomposed.png><link rel="shortcut icon" href=/img/favicon.png><link href=/assets/fonts/Inter-Italic.woff2 rel=preload type=font/woff2 as=font crossorigin><link href=/assets/fonts/Inter-Regular.woff2 rel=preload type=font/woff2 as=font crossorigin><link href=/assets/fonts/Inter-Medium.woff2 rel=preload type=font/woff2 as=font crossorigin><link href=/assets/fonts/Inter-MediumItalic.woff2 rel=preload type=font/woff2 as=font crossorigin><link href=/assets/fonts/Inter-Bold.woff2 rel=preload type=font/woff2 as=font crossorigin><link href=/assets/fonts/Inter-BoldItalic.woff2 rel=preload type=font/woff2 as=font crossorigin><meta name=twitter:card content="summary"><meta name=twitter:title content="Deploy Telegram Bot to Azure"><meta name=twitter:description content="文中會使用Go來寫一個Telegram Bot，並將其部署到Azure上"><meta property="og:title" content="Deploy Telegram Bot to Azure"><meta property="og:description" content="文中會使用Go來寫一個Telegram Bot，並將其部署到Azure上"><meta property="og:type" content="article"><meta property="og:url" content="/post/telegram-bot-azure/"><meta property="article:section" content="post"><meta property="article:published_time" content="2021-11-03T00:00:00+00:00"><meta property="article:modified_time" content="2021-11-03T00:00:00+00:00"><meta property="og:site_name" content="Hello Friend"></head><body><div class=container><header class=header><span class=header__inner><a href=/ class=logo style=text-decoration:none><span class=logo__mark><svg xmlns="http://www.w3.org/2000/svg" class="greater-icon" viewBox="0 0 44 44"><path fill="none" d="M15 8l14.729 14.382L15 35.367"/></svg></span><span class=logo__text>hello friend</span>
+<span class=logo__cursor></span></a>
+<span class=header__right><nav class=menu><ul class="menu__inner menu__inner--desktop"><li><a href=/about>About</a></li><li><a href=/tags>Tags</a></li></ul><ul class="menu__inner menu__inner--mobile"><li><a href=/about>About</a></li><li><a href=/tags>Tags</a></li></ul></nav><span class=menu-trigger><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M0 0h24v24H0z" fill="none"/><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg></span><span class=theme-toggle><svg class="theme-toggler" width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M22 41c10.4934.0 19-8.5066 19-19C41 11.5066 32.4934 3 22 3 11.5066 3 3 11.5066 3 22s8.5066 19 19 19zM7 22C7 13.7157 13.7157 7 22 7V37C13.7157 37 7 30.2843 7 22z"/></svg></span></span></span></header><div class=content><div class=post><h1 class=post-title>Deploy Telegram Bot to Azure</h1><div class=post-meta><span class=post-date>2021-11-03</span>
+<span class=post-author>— Written by Zi-Shane</span></div><span class=post-tags><a href=/tags/azure/>#Azure</a>&nbsp;
+<a href=/tags/golang/>#Golang</a>&nbsp;</span><div class=post-content><p>這篇文章會用<a href=https://github.com/go-telegram-bot-api/telegram-bot-api>telegram-bot-api</a>這個套件在github上的範例程式（是一個echo server），最後把部署到Azure的AKS上去</p><ol><li>Create your Telegram Bot</li><li>Build container image</li><li>Create a Registry on Azure</li><li>Push container image to Azure Container Registry(ACR)</li><li>Create a k8s cluster</li><li>Deploy image to k8s</li><li>Future work</li></ol><hr><h2 id=create-your-telegram-bot>Create your Telegram Bot</h2><p>如果到google搜尋的話，第一個看到應該是這個套件<a href=https://github.com/go-telegram-bot-api/telegram-bot-api>telegram-bot-api</a>，他算是一個把<a href=https://core.telegram.org/bots/api#using-a-local-bot-api-server>Telegram Bot API文件中的method</a>包好，讓你可以直接call他寫好的function，幫助你快速做出Bot的套件。</p><p>仔細去看code會發現，他其實會幫你產生Request去跟Telegram Bot API要資料回來</p><p>以getUpdate為例，從程式碼對照官方API文件(<a href=https://core.telegram.org/bots/api#getupdates>getUpdate</a>)可以看到，他們是一樣的東西</p><p><img src=https://i.imgur.com/7eD5TL5.png alt=照官方API文件(getUpdate)>
+官方API文件(getUpdate)</p><p><img src=https://i.imgur.com/euE3mKT.png alt>
+套件中的GetUpdate函數</p><p>這篇文章會用github給的<a href=https://github.com/go-telegram-bot-api/telegram-bot-api#example>範例程式</a>，這是一個echo server，最後要部署到Azure的AKS上去</p><p>首先，安裝套件</p><blockquote><p>First, ensure the library is installed and up to date by running go get -u github.com/go-telegram-bot-api/telegram-bot-api.</p></blockquote><p>改好<code>TOKEN</code>之後，可以跑看看這個程式，再到Telegram上發訊息給你的Bot，Bot就會回覆相同的訊息給你</p><p>至於<code>TOKEN</code>我自己是把它存在一個<code>.env</code>檔案中，再把他ignore掉才不會不小心上傳到github上去，需要的話可以直接使用下面這段程式碼，主要使改成從環境變數來讀取<code>TOKEN</code></p><ul><li><code>.env</code></li></ul><pre tabindex=0><code>TELEGRAM_APITOKEN=123456:yaaaaaaaaaaa
+</code></pre><div class=collapsable-code><input id=459362781 type=checkbox>
+<label for=459362781><span class=collapsable-code__language>go</span>
+<span class=collapsable-code__title>app.go</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-go><code>
+package main
+
+import (
+	&#34;log&#34;
+	&#34;os&#34;
+
+	tgbotapi &#34;github.com/go-telegram-bot-api/telegram-bot-api&#34;
+	&#34;github.com/joho/godotenv&#34;
+)
+
+func main() {
+	envs_path := &#34;./secret/.env&#34;
+	err := godotenv.Load(envs_path)
+	if err != nil {
+		log.Fatal(&#34;Error loading .env file&#34;)
+	} else {
+		log.Printf(&#34;Loaded ENV from %s&#34;, envs_path)
+	}
+	bot, err := tgbotapi.NewBotAPI(os.Getenv(&#34;TELEGRAM_APITOKEN&#34;))
+	if err != nil {
+		log.Panic(err)
+	}
+
+	bot.Debug = true
+
+	log.Printf(&#34;Authorized on account %s&#34;, bot.Self.UserName)
+
+	// Create a new UpdateConfig struct with an offset of 0. Offsets are used
+	// to make sure Telegram knows we&#39;ve handled previous values and we don&#39;t
+	// need them repeated.
+	updateConfig := tgbotapi.NewUpdate(0)
+
+	// Tell Telegram we should wait up to 30 seconds on each request for an
+	// update. This way we can get information just as quickly as making many
+	// frequent requests without having to send nearly as many.
+	updateConfig.Timeout = 30
+
+	// Start polling Telegram for updates.
+	updates, err := bot.GetUpdatesChan(updateConfig)
+
+	// Let&#39;s go through each update that we&#39;re getting from Telegram.
+	for update := range updates {
+		// Telegram can send many types of updates depending on what your Bot
+		// is up to. We only want to look at messages for now, so we can
+		// discard any other updates.
+		if update.Message == nil {
+			continue
+		}
+
+		// Now that we know we&#39;ve gotten a new message, we can construct a
+		// reply! We&#39;ll take the Chat ID and Text from the incoming message
+		// and use it to create a new message.
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, update.Message.Text)
+		// We&#39;ll also say that this message is a reply to the previous message.
+		// For any other specifications than Chat ID or Text, you&#39;ll need to
+		// set fields on the `MessageConfig`.
+		msg.ReplyToMessageID = update.Message.MessageID
+
+		// Okay, we&#39;re sending our message off! We don&#39;t care about the message
+		// we just sent, so we&#39;ll discard it.
+		if _, err := bot.Send(msg); err != nil {
+			// Note that panics are a bad way to handle errors. Telegram can
+			// have service outages or network errors, you should retry sending
+			// messages or more gracefully handle failures.
+			panic(err)
+		}
+	}
+
+}
+</code></pre></div><hr><h2 id=build-container-image>Build container image</h2><p>再來要產生container image，使用以下Dockerfile產生Telegram Bot的image，要用來deploy到AKS之上</p><p>而我的資料夾架構長得像這樣：</p><pre tabindex=0><code>Telegram-Bot
+├── Dockerfile
+├── app.go
+├── go.mod
+├── go.sum
+├── secret
+└── tgbot.yaml
+</code></pre><p>我是使用podman，如果用docker的話也沒問題，把<code>podman</code>改成<code>docker</code>即可</p><pre tabindex=0><code>podman build -t tgbot:v1 .
+</code></pre><ul><li>Dockerfile</li></ul><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-dockerfile data-lang=dockerfile><span style=display:flex><span><span style=color:#66d9ef>FROM</span><span style=color:#e6db74> docker.io/library/golang</span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span><span style=color:#66d9ef>RUN</span> mkdir -p /app<span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span><span style=color:#66d9ef>WORKDIR</span><span style=color:#e6db74> /app</span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span><span style=color:#66d9ef>COPY</span> . .<span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span><span style=color:#66d9ef>RUN</span> go mod download <span style=color:#f92672>&amp;&amp;</span><span style=color:#ae81ff>\
+</span></span></span><span style=display:flex><span><span style=color:#ae81ff></span>    go build -o app<span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span><span style=color:#66d9ef>ENTRYPOINT</span> [<span style=color:#e6db74>&#34;./app&#34;</span>]<span style=color:#960050;background-color:#1e0010>
+</span></span></span></code></pre></div><p>可以先在local端自己跑起來試看看</p><pre tabindex=0><code>podman run --name tgbot tgbot:v1
+</code></pre><p>理論上會和<a href=##Create_your_Telegram_Bot>第一步的結果</a>相同</p><hr><h2 id=create-a-registry-on-azure>Create a Registry on Azure</h2><p>要部署到Azure之前的準備工作，本文是參考Azure的<a href="https://docs.microsoft.com/en-us/azure/aks/tutorial-kubernetes-prepare-acr?tabs=azure-cli">這份教學文件</a>來做的，會使用到<a href=https://docs.microsoft.com/en-us/cli/azure/install-azure-cli>Azure CLI</a></p><p>這裡所做的事情是在Azure建一個類似Docker Hub的地方，讓你可以上傳你的container images</p><p>這部分我是用<a href=https://portal.azure.com/>Azure Portal</a>用GUI來做，所做的事情相對簡單，主要是做以下兩個。</p><ul><li>建立Resource Group和選擇Location</li><li>建立Azure Container Registry</li></ul><p><img src=https://i.imgur.com/zmrDV64.png alt></p><p>當然如果想用cli做也可以參考<a href="https://docs.microsoft.com/en-us/azure/aks/tutorial-kubernetes-prepare-acr?tabs=azure-cli">這份教學文件</a></p><hr><h2 id=push-container-image-to-azure-container-registryacr>Push container image to Azure Container Registry(ACR)</h2><p>再來要把Bot的image給push到剛剛建立的Registry上面</p><p>到Azure Portal上<code>Settings -> Access keys</code>把Admin user的選項打開，就可以透過帳號密碼上傳自己的image</p><p><img src=https://i.imgur.com/JHe2l7P.png alt></p><p>回到自己電腦的terminal，用podman登入剛剛得到的username和password，並上傳image</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span>podman login
+</span></span><span style=display:flex><span><span style=color:#75715e># username:</span>
+</span></span><span style=display:flex><span><span style=color:#75715e># password:</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>podman image tag tgbot:v1 tgbotreg.azureacr.io/tgbot:v1
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>podman push tgbotreg.azureacr.io/tgbot:v1
+</span></span></code></pre></div><p>等待上傳完成&mldr;（note: 另一篇文章會改成更好的方式來建立image）
+到<code>Service -> Repository</code>可以看到上傳好的image</p><p><img src=https://i.imgur.com/Gejp07v.png alt></p><hr><h2 id=create-a-k8s-cluster>Create a k8s cluster</h2><p>再來就是使用AKS建置一個k8s的cluster了，一樣參考<a href="https://docs.microsoft.com/en-us/azure/aks/tutorial-kubernetes-deploy-cluster?tabs=azure-cli">這份教學文件</a></p><p>只是這部分我是使用Azure Cli來完成，因為Azure Portal上遇到一些問題&mldr;</p><p>直接下指令，Resource Group要和Registry相同，Cluster Name可以隨意取</p><pre tabindex=0><code class=language-azure data-lang=azure>az aks create \
+    --resource-group Telegram-Bot \
+    --name tgbot \
+    --node-count 2 \
+    --generate-ssh-keys \
+    --node-vm-size Standard_B2s \
+    --attach-acr tgbotReg
+</code></pre><p>參數也可以自行調整：<a href="https://docs.microsoft.com/en-us/cli/azure/aks?view=azure-cli-latest#az_aks_create">az aks create文件</a></p><p>稍微等待他跑完&mldr;</p><p><img src=https://i.imgur.com/izYiJUU.png alt></p><p>用以下指令來設定<code>kubectl</code>，記得指對Resource Group和Cluster Name</p><pre tabindex=0><code class=language-azure data-lang=azure>az aks get-credentials --resource-group Telegram-Bot --name tgbot
+</code></pre><p>接著就可以用<code>kubectl</code>來操作cluster了～</p><p><img src=https://i.imgur.com/pH3oLeM.png alt></p><hr><h2 id=deploy-image-to-k8s>Deploy image to k8s</h2><p>我是使用<a href=https://k8syaml.com>k8s yaml的生成器</a>來產生部署用的yaml file(tgbot.yaml)，產生的Deployment，要修改3個地方</p><ul><li>第4行：取一個Deployment名稱</li><li>第18行：取一個Container名稱</li><li>第19行：指定container image</li></ul><p>部署方式有兩種:</p><ul><li>透過kubectl</li></ul><pre tabindex=0><code>kubectl apply -f tgbot.yaml
+</code></pre><p>or</p><ul><li><p>用Azure Portal，複製貼上<code>yaml file</code>
+<img src=https://i.imgur.com/P2qWeBq.png alt></p></li><li><p>tgbot.yaml</p></li></ul><pre tabindex=0><code class="language-yaml=" data-lang="yaml=">apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tgbot-deploy
+spec:
+  selector:
+    matchLabels:
+      octopusexport: OctopusExport
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        octopusexport: OctopusExport
+    spec:
+      containers:
+        - name: tgbot
+          image: &#39;tgbotreg.azurecr.io/tgbot:v1&#39;
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - web
+                topologyKey: kubernetes.io/hostname
+</code></pre><hr><h2 id=future-work>Future work</h2><p>這篇文章主要是部署一個Go程式到Azure的k8s cluster上，這中間有許多可以在改善或是延伸的地方，像是使用CI/CD來自動化build image、不使用套件而改用webhook的方式來寫Telegram Bot等等</p><hr><p>參考文件：</p><ul><li><a href=https://docs.microsoft.com/en-us/azure/aks/tutorial-kubernetes-deploy-application>https://docs.microsoft.com/en-us/azure/aks/tutorial-kubernetes-deploy-application</a></li><li><a href=https://pkg.go.dev/github.com/go-telegram-bot-api/telegram-bot-api@v4.6.4+incompatible#readme-example>https://pkg.go.dev/github.com/go-telegram-bot-api/telegram-bot-api@v4.6.4+incompatible#readme-example</a></li></ul></div><div class=pagination><div class=pagination__title><span class=pagination__title-h>Read other posts</span><hr></div><div class=pagination__buttons><span class="button previous"><a href=/post/golang-restful-api/><span class=button__icon>←</span>
+<span class=button__text>使用Golang來寫一個RESTful API</span></a></span>
+<span class="button next"><a href=/post/mbedtls-example/><span class=button__text>mbedtls使用筆記</span>
+<span class=button__icon>→</span></a></span></div></div><div id=disqus_thread></div><script type=application/javascript>window.disqus_config=function(){},function(){if(["localhost","127.0.0.1"].indexOf(window.location.hostname)!=-1){document.getElementById("disqus_thread").innerHTML="Disqus comments not available by default when the website is previewed locally.";return}var t=document,e=t.createElement("script");e.async=!0,e.src="//zi-shane-github-io.disqus.com/embed.js",e.setAttribute("data-timestamp",+new Date),(t.head||t.body).appendChild(e)}()</script><noscript>Please enable JavaScript to view the <a href=https://disqus.com/?ref_noscript>comments powered by Disqus.</a></noscript><a href=https://disqus.com class=dsq-brlink>comments powered by <span class=logo-disqus>Disqus</span></a></div></div><footer class=footer><div class=footer__inner><a href=/ class=logo style=text-decoration:none><span class=logo__mark><svg xmlns="http://www.w3.org/2000/svg" class="greater-icon" viewBox="0 0 44 44"><path fill="none" d="M15 8l14.729 14.382L15 35.367"/></svg></span><span class=logo__text>hello friend</span>
+<span class=logo__cursor></span></a><div class=copyright><span>© 2022 Powered by
+<a href=https://gohugo.io target=_blank rel=noopener>Hugo</a></span>
+<span>Theme created by
+<a href=https://twitter.com/panr target=_blank rel=noopener>panr</a></span></div></div></footer><script src=/assets/main.js></script>
+<script src=/assets/prism.js></script></div><script type=application/javascript>var doNotTrack=!1;doNotTrack||(function(e,t,n,s,o,i,a){e.GoogleAnalyticsObject=o,e[o]=e[o]||function(){(e[o].q=e[o].q||[]).push(arguments)},e[o].l=1*new Date,i=t.createElement(n),a=t.getElementsByTagName(n)[0],i.async=1,i.src=s,a.parentNode.insertBefore(i,a)}(window,document,"script","https://www.google-analytics.com/analytics.js","ga"),ga("create","UA-122716411-1","auto"),ga("send","pageview"))</script></body></html>

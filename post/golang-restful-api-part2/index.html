@@ -1,0 +1,313 @@
+<!doctype html><html lang=en><head><title>使用Golang來寫一個RESTful API - Part2 ::
+Hello Friend — A simple theme for Hugo</title><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=description content="我的程式架構如下圖所示，Client可以通過api來讀寫資料庫中的資料。這篇文章主要是討論backend的部分要如何實現。本實作會使用Gin和Gorm來完成，Database則使用MariaDB。
+這篇文章是延續上一篇的內容，多完成了對資料庫進行Create, Update, Delete以及Join這種比較複雜的查詢。完成的程式碼可以參考我的github。
+架構圖 資料庫Scheme 資料來源：https://www.mariadbtutorial.com/getting-started/mariadb-sample-database/
+完成的成果有以下功能： GET /api/GetLanguage/:id --&amp;gt; 根據id讀出對應的Language GET /api/GetLanguageRange/:start/:end --&amp;gt; 根據給定id範圍，讀出所有Language GET /api/GetCountryUselanguage/?counry --&amp;gt; 根據query的country，讀出其所使用語言 POST /api/AddLanguage --&amp;gt; 根據POST的Body(json)來新增資料 DELETE /api/DeleteLanguage/:language --&amp;gt; 根據language刪除該筆資料 PUT /api/UpdataLanguage --&amp;gt; 根據PUT的Body(json)更新資料 開發環境 Golang gorm: ORM library for Golang gin: HTTP web framework MariaDB Database的部分採用MariaDB，資料使用的是網路上的sample database可以直接下載。 建議可以使用docker-compose來架設，這裡有寫好的docker-compose設定（mariadb-phpmyadmin），phpmyadmin也這串好了。
+使用方式：
+可以自己修改image, username, password，最後cd到mariadb-phpmyadmin資料夾下docker-compose up -d就可以啟動一個MariaDB了。
+API測試工具 Thunder Client: 是一個VSCode的Extension，可以用來取代Postman而且還不用額外安裝其它程式 程式碼架構 程式進入點為main.go，資料庫連線設定在database資料夾，而我會將整個API拆成三個部分，分別放在不同的資料夾：
+routes: 設定api的路徑，與對應的function controllers: 處理api收到request（route對應到的function） services: 對資料庫操作 . |-- routes | |-- api-routes."><meta name=keywords content><meta name=robots content="noodp"><link rel=canonical href=/post/golang-restful-api-part2/><link rel=stylesheet href=/assets/style.css><link rel=stylesheet href=/style.css><link rel=apple-touch-icon-precomposed sizes=144x144 href=/img/apple-touch-icon-144-precomposed.png><link rel="shortcut icon" href=/img/favicon.png><link href=/assets/fonts/Inter-Italic.woff2 rel=preload type=font/woff2 as=font crossorigin><link href=/assets/fonts/Inter-Regular.woff2 rel=preload type=font/woff2 as=font crossorigin><link href=/assets/fonts/Inter-Medium.woff2 rel=preload type=font/woff2 as=font crossorigin><link href=/assets/fonts/Inter-MediumItalic.woff2 rel=preload type=font/woff2 as=font crossorigin><link href=/assets/fonts/Inter-Bold.woff2 rel=preload type=font/woff2 as=font crossorigin><link href=/assets/fonts/Inter-BoldItalic.woff2 rel=preload type=font/woff2 as=font crossorigin><meta name=twitter:card content="summary"><meta name=twitter:title content="使用Golang來寫一個RESTful API - Part2"><meta name=twitter:description content="用Gin和Gorm來做出一個有CRUD功能的RESTful API"><meta property="og:title" content="使用Golang來寫一個RESTful API - Part2"><meta property="og:description" content="用Gin和Gorm來做出一個有CRUD功能的RESTful API"><meta property="og:type" content="article"><meta property="og:url" content="/post/golang-restful-api-part2/"><meta property="article:section" content="post"><meta property="article:published_time" content="2021-12-17T00:00:00+00:00"><meta property="article:modified_time" content="2021-12-17T00:00:00+00:00"><meta property="og:site_name" content="Hello Friend"></head><body><div class=container><header class=header><span class=header__inner><a href=/ class=logo style=text-decoration:none><span class=logo__mark><svg xmlns="http://www.w3.org/2000/svg" class="greater-icon" viewBox="0 0 44 44"><path fill="none" d="M15 8l14.729 14.382L15 35.367"/></svg></span><span class=logo__text>hello friend</span>
+<span class=logo__cursor></span></a>
+<span class=header__right><nav class=menu><ul class="menu__inner menu__inner--desktop"><li><a href=/about>About</a></li><li><a href=/tags>Tags</a></li></ul><ul class="menu__inner menu__inner--mobile"><li><a href=/about>About</a></li><li><a href=/tags>Tags</a></li></ul></nav><span class=menu-trigger><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M0 0h24v24H0z" fill="none"/><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg></span><span class=theme-toggle><svg class="theme-toggler" width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M22 41c10.4934.0 19-8.5066 19-19C41 11.5066 32.4934 3 22 3 11.5066 3 3 11.5066 3 22s8.5066 19 19 19zM7 22C7 13.7157 13.7157 7 22 7V37C13.7157 37 7 30.2843 7 22z"/></svg></span></span></span></header><div class=content><div class=post><h1 class=post-title>使用Golang來寫一個RESTful API - Part2</h1><div class=post-meta><span class=post-date>2021-12-17</span>
+<span class=post-author>— Written by Zi-Shane</span></div><span class=post-tags><a href=/tags/golang/>#Golang</a>&nbsp;
+<a href=/tags/restful-api/>#RESTful API</a>&nbsp;
+<a href=/tags/%E5%BE%8C%E7%AB%AF/>#後端</a>&nbsp;</span><div class=post-content><p>我的程式架構如下圖所示，Client可以通過api來讀寫資料庫中的資料。這篇文章主要是討論backend的部分要如何實現。本實作會使用Gin和Gorm來完成，Database則使用MariaDB。</p><p>這篇文章是延續上<a href=https://zi-shane.github.io/post/golang-restful-api/>一篇的內容</a>，多完成了對資料庫進行Create, Update, Delete以及Join這種比較複雜的查詢。完成的程式碼可以參考我的<a href=https://github.com/Zi-Shane/api-project/tree/v1.0.1>github</a>。</p><h4 id=架構圖>架構圖</h4><p><img src=https://i.imgur.com/lNeXLJZ.png alt></p><h4 id=資料庫scheme>資料庫Scheme</h4><p>資料來源：<a href=https://www.mariadbtutorial.com/getting-started/mariadb-sample-database/>https://www.mariadbtutorial.com/getting-started/mariadb-sample-database/</a></p><p><img src=https://i.imgur.com/0C5yAY3.png alt></p><h4 id=完成的成果有以下功能>完成的成果有以下功能：</h4><pre tabindex=0><code>GET    /api/GetLanguage/:id               --&gt; 根據id讀出對應的Language 
+GET    /api/GetLanguageRange/:start/:end  --&gt; 根據給定id範圍，讀出所有Language 
+GET    /api/GetCountryUselanguage/?counry --&gt; 根據query的country，讀出其所使用語言
+POST   /api/AddLanguage                   --&gt; 根據POST的Body(json)來新增資料 
+DELETE /api/DeleteLanguage/:language      --&gt; 根據language刪除該筆資料 
+PUT    /api/UpdataLanguage                --&gt; 根據PUT的Body(json)更新資料
+</code></pre><hr><h2 id=開發環境>開發環境</h2><ul><li>Golang<ul><li><a href=https://github.com/go-gorm/gorm>gorm</a>: ORM library for Golang</li><li><a href=https://github.com/gin-gonic/gin>gin</a>: HTTP web framework</li></ul></li><li>MariaDB<ul><li><p>Database的部分採用MariaDB，資料使用的是網路上的<a href=https://www.mariadbtutorial.com/getting-started/mariadb-sample-database/>sample database</a>可以直接下載。
+建議可以使用docker-compose來架設，<a href=https://github.com/Zi-Shane/docker-compose-files>這裡有寫好的docker-compose設定（mariadb-phpmyadmin）</a>，phpmyadmin也這串好了。</p><p>使用方式：<br>可以自己修改image, username, password，最後<code>cd</code>到<code>mariadb-phpmyadmin</code>資料夾下<code>docker-compose up -d</code>就可以啟動一個MariaDB了。</p></li></ul></li><li>API測試工具<ul><li><a href=https://www.thunderclient.io>Thunder Client</a>: 是一個VSCode的Extension，可以用來取代Postman而且還不用額外安裝其它程式</li></ul></li></ul><hr><h2 id=程式碼架構>程式碼架構</h2><p>程式進入點為main.go，資料庫連線設定在<code>database</code>資料夾，而我會將整個API拆成三個部分，分別放在不同的資料夾：</p><ul><li><code>routes</code>: 設定api的路徑，與對應的function</li><li><code>controllers</code>: 處理api收到request（route對應到的function）</li><li><code>services</code>: 對資料庫操作</li></ul><pre tabindex=0><code>.
+|-- routes
+|   |-- api-routes.go
+|   `-- route-utils.go
+|-- controllers
+|   |-- language-controller.go
+|   `-- hostInfo-controller.go
+|-- services
+|   `-- Language-service.go
+|-- database
+|   |-- scheme.go
+|   `-- database.go
+|-- go.mod
+|-- go.sum
+`-- main.go
+</code></pre><hr><h2 id=實作程式>實作程式</h2><p>將資料庫的四種操作分別對應到HTTP的四種方法。而我所設計的API提供這四種功能來對資料庫進行操作</p><table><thead><tr><th style=text-align:left>資料庫功能</th><th style=text-align:center>HTTP Method</th></tr></thead><tbody><tr><td style=text-align:left>查詢Read (SELECT)</td><td style=text-align:center>GET</td></tr><tr><td style=text-align:left>新增Create (INSERT)</td><td style=text-align:center>POST</td></tr><tr><td style=text-align:left>更新Update (UPDATE)</td><td style=text-align:center>PUT</td></tr><tr><td style=text-align:left>刪除Delete (DELETE)</td><td style=text-align:center>DELETE</td></tr></tbody></table><hr><h2 id=開始實作>開始實作</h2><h3 id=查詢read>查詢Read</h3><p>查詢可以分為簡單的查詢<div class=collapsable-code><input id=628345197 type=checkbox>
+<label for=628345197><span class=collapsable-code__language>sql</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-sql><code>
+SELECT * FROM `language` WHERE id=1
+</code></pre></div></p><p>或是JOIN這種多個Table的複雜查詢<div class=collapsable-code><input id=724819356 type=checkbox>
+<label for=724819356><span class=collapsable-code__language>sql</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-sql><code>
+SELECT C.name AS Country_Name, L.language FROM `countries` AS C
+JOIN `country_languages` AS CL
+ON CL.country_id = C.country_id
+JOIN `languages` AS L
+ON CL.language_id = L.language_id
+</code></pre></div></p><h4 id=簡單的查詢>簡單的查詢</h4><p>我們可以使用Gorm來對資料庫下指令，<code>database.DB</code>是我們的程式和databse建立的連線。</p><p>以這個查詢為例，這個例子應該蠻好理解的<code>Where()</code>是條件，<code>Find(&languages)</code>會把查詢結果放進去<code>languages</code>變數之中。</p><ul><li><p>SQL<div class=collapsable-code><input id=635874912 type=checkbox>
+<label for=635874912><span class=collapsable-code__language>sql</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-sql><code>
+SELECT * FROM `language` WHERE `Language_id` BETWEEN 10 AND 20
+</code></pre></div></p></li><li><p>Code<div class=collapsable-code><input id=634215879 type=checkbox>
+<label for=634215879><span class=collapsable-code__language>go</span>
+<span class=collapsable-code__title>controllers/language-controller.go</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-go><code>
+func ReadLanguages(startId string, endId string) ([]database.Languages, error) {
+	var languages []database.Languages
+    
+	// SELECT * FROM `language` WHERE `Language_id` BETWEEN 10 AND 20
+	result := database.DB.Where(&#34;Language_id BETWEEN ? AND ?&#34;, startId, endId).Find(&amp;languages)
+
+	return languages, result.Error
+}
+</code></pre></div></p></li></ul><h4 id=複雜查詢>複雜查詢</h4><p>以這個查詢為例，有三個table做JOIN，分別是<code>countries</code>、<code>languages</code>和<code>country_languages</code>，由<code>Joins()</code>指定JOIN的條件，而<code>Where()</code>是SELECT&mldr;FROM&mldr;WHERE的條件，最後<code>Scan(&r)</code>把結果存入<code>r</code>這個變數之中。</p><p>提醒一點，structure的欄位要和查詢的結果column名稱相同，也就是要根據<code>C.name AS CountryName</code>的部分～</p><ul><li><p>SQL<div class=collapsable-code><input id=759843216 type=checkbox>
+<label for=759843216><span class=collapsable-code__language>sql</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-sql><code>
+SELECT C.name AS Country_Name, L.language FROM `countries` AS C
+JOIN `country_languages` AS CL
+ON CL.country_id = C.country_id
+JOIN `languages` AS L
+ON CL.language_id = L.language_id
+</code></pre></div></p></li><li><p>Code<div class=collapsable-code><input id=498157263 type=checkbox>
+<label for=498157263><span class=collapsable-code__language>go</span>
+<span class=collapsable-code__title>services/Language-service.go</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-go><code>
+func GetCountryUsedLanguages(country string) ([]database.CountryUesdLanguage, error) {
+	var r []database.CountryUesdLanguage
+
+	result := database.DB.
+		Table(&#34;countries AS C&#34;).
+		Select(&#34;C.name AS CountryName, L.language AS Language&#34;).
+		Joins(&#34;JOIN country_languages AS CL ON CL.country_id = C.country_id&#34;).
+		Joins(&#34;JOIN languages AS L ON CL.language_id = L.language_id&#34;).
+		Where(&#34;C.name = ?&#34;, country).
+		Scan(&amp;r)
+
+	return r, result.Error
+}
+</code></pre></div><div class=collapsable-code><input id=451296378 type=checkbox>
+<label for=451296378><span class=collapsable-code__language>go</span>
+<span class=collapsable-code__title>database/scheme.go</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-go><code>
+type CountryUesdLanguage struct {
+	CountryName string
+	Language    string
+}
+</code></pre></div></p></li></ul><hr><h3 id=新增create>新增Create</h3><p><code>InsertLanguage()</code>的部分，Gorm會根據structure的名稱去選擇Table</p><ul><li><p>SQL<div class=collapsable-code><input id=287453619 type=checkbox>
+<label for=287453619><span class=collapsable-code__language>sql</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-sql><code>
+INSERT INTO `Language` (`Language_id`, `Language`) VALUES (500, &#34;Test1&#34;), (500, &#34;Test1&#34;)
+</code></pre></div></p></li><li><p>code<div class=collapsable-code><input id=432518796 type=checkbox>
+<label for=432518796><span class=collapsable-code__language>go</span>
+<span class=collapsable-code__title>services/Language-service.go</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-go><code>
+func InsertLanguage(items []database.Languages) (int64, error) {
+	// INSERT INTO `Language` (`Language_id`, `Language`) VALUES (500, &#34;Test1&#34;), (500, &#34;Test1&#34;)
+	result := database.DB.Create(items)
+
+	return result.RowsAffected, result.Error
+}
+</code></pre></div></p></li></ul><hr><h3 id=刪除delete>刪除Delete</h3><p><code>DeleteLanguage()</code>的部分，<code>Delete(&database.Languages{})</code>DELETE並不需要回傳資料，其用意應該跟上面（新增Create）的意思差不多，Gorm會根據structure的名稱去選擇Table，</p><ul><li><p>SQL<div class=collapsable-code><input id=182693547 type=checkbox>
+<label for=182693547><span class=collapsable-code__language>sql</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-sql><code>
+DELETE FROM `Language` WHERE `Language` = &#34;Test1&#34;
+</code></pre></div></p></li><li><p>code<div class=collapsable-code><input id=514298376 type=checkbox>
+<label for=514298376><span class=collapsable-code__language>go</span>
+<span class=collapsable-code__title>services/Language-service.go</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-go><code>
+func DeleteLanguage(languageName string) (int64, error) {
+	// DELETE FROM `Language` WHERE `Language` = &#34;Test1&#34;
+	result := database.DB.Where(&#34;Language = ?&#34;, languageName).Delete(&amp;database.Languages{})
+
+	return result.RowsAffected, result.Error
+}
+</code></pre></div></p></li></ul><hr><h3 id=更新update>更新Update</h3><ul><li><p>SQL<div class=collapsable-code><input id=421687359 type=checkbox>
+<label for=421687359><span class=collapsable-code__language>sql</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-sql><code>
+UPDATE `Language` SET `Language` = &#34;UpdatedLanguage&#34; WHERE `Language_id` = 500
+</code></pre></div></p></li><li><p>code<div class=collapsable-code><input id=326879154 type=checkbox>
+<label for=326879154><span class=collapsable-code__language>go</span>
+<span class=collapsable-code__title>services/Language-service.go</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-go><code>
+func UpdateLanguage(item database.Languages) (int64, error) {
+	// UPDATE `Language` SET `Language` = &#34;UpdatedLanguage&#34; WHERE `Language_id` = 500
+	result := database.DB.Model(&amp;database.Languages{}).Where(&#34;Language_id = ?&#34;, item.Language_id).Update(&#34;Language&#34;, item.Language)
+
+	return result.RowsAffected, result.Error
+}
+</code></pre></div></p></li></ul><hr><h3 id=處理request>處理Request</h3><h4 id=get-apigetlanguagerangestartend><code>GET api/GetLanguageRange/:start/:end</code></h4><p>範例：查詢Language_id為10~20的資料</p><pre tabindex=0><code>http://localhost:3000/api/GetLanguageRange/10/20
+</code></pre><p>當有Request戳到<code>GET api/GetLanguageRange/:start/:end</code>時，會執行<code>GetLanguages()</code>這個HandleFunc()。</p><div class=collapsable-code><input id=124896375 type=checkbox>
+<label for=124896375><span class=collapsable-code__language>go</span>
+<span class=collapsable-code__title>routes/api-routes.go</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-go><code>
+func setupLanguageRoute() {
+	register(&#34;GET&#34;, &#34;/api/GetLanguage/:id&#34;, controllers.GetLanguage)
+	register(&#34;GET&#34;, &#34;/api/GetLanguageRange/:start/:end&#34;, controllers.GetLanguages)
+	register(&#34;GET&#34;, &#34;/api/GetCountryUselanguage&#34;, controllers.GetCountryUesdLanguages)
+}
+</code></pre></div><p>由<code>c.Param()</code>來取出參數，帶入用Gorm寫好的function來取得SQL的查詢結果</p><div class=collapsable-code><input id=891725436 type=checkbox>
+<label for=891725436><span class=collapsable-code__language>go</span>
+<span class=collapsable-code__title>controllers/language-controller.go</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-go><code>
+func GetLanguages(c *gin.Context) {
+	// get URL parameters
+	startId := c.Param(&#34;start&#34;)
+	endId := c.Param(&#34;end&#34;)
+	// Call function to get data from database
+	languages, err := services.ReadLanguages(startId, endId)
+	if err != nil {
+		c.JSON(200, gin.H{&#34;message&#34;: err.Error()})
+	} else {
+		// Response result to Client
+		c.JSON(200, gin.H{&#34;message&#34;: &#34;success&#34;, &#34;result&#34;: languages})
+	}
+}
+</code></pre></div><p>回傳果如下<div class=collapsable-code><input id=248169735 type=checkbox>
+<label for=248169735><span class=collapsable-code__language>json</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-json><code>
+{
+  &#34;message&#34;: &#34;success&#34;,
+  &#34;result&#34;: [
+    {
+      &#34;Language_id&#34;: 10,
+      &#34;Language&#34;: &#34;Ambo&#34;
+    },
+    {
+      &#34;Language_id&#34;: 11,
+      &#34;Language&#34;: &#34;Chokwe&#34;
+    },
+    {
+      &#34;Language_id&#34;: 12,
+      &#34;Language&#34;: &#34;Kongo&#34;
+    },
+    {
+      &#34;Language_id&#34;: 13,
+      &#34;Language&#34;: &#34;Luchazi&#34;
+    }
+  ]
+}
+</code></pre></div></p><hr><h4 id=get----apigetcountryuselanguagecounry><code>GET /api/GetCountryUselanguage/?counry</code></h4><p>範例：查詢Canada所使用的Language為何？</p><pre tabindex=0><code>http://localhost:3000/api/GetCountryUselanguage/?country=Canada
+</code></pre><p>當有Request戳到<code>GET api/GetCountryUselanguage/?counry</code>時，會執行<code>GetCountryUesdLanguages()</code>這個HandleFunc()</p><p>和前一個差異在於<code>?country=Canada</code>這個稱為一個query，可以視為一組key, value，可以使用<code>c.Query("country")</code>取出值</p><div class=collapsable-code><input id=416592873 type=checkbox>
+<label for=416592873><span class=collapsable-code__language>go</span>
+<span class=collapsable-code__title>controllers/language-controller.go</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-go><code>
+func GetCountryUesdLanguages(c *gin.Context) {
+	country := c.Query(&#34;country&#34;)
+	var result []database.CountryUesdLanguage
+	result, err := services.GetCountryUsedLanguages(country)
+	if err != nil {
+		c.JSON(200, gin.H{&#34;message&#34;: err.Error()})
+	} else {
+		// Response data to Client
+		c.JSON(200, gin.H{&#34;message&#34;: &#34;success&#34;, &#34;result&#34;: result})
+	}
+}
+</code></pre></div><p>回傳果如下<div class=collapsable-code><input id=957286143 type=checkbox>
+<label for=957286143><span class=collapsable-code__language>json</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-json><code>
+{
+  &#34;message&#34;: &#34;success&#34;,
+  &#34;result&#34;: [
+    {
+      &#34;CountryName&#34;: &#34;Canada&#34;,
+      &#34;Language&#34;: &#34;Dutch&#34;
+    },
+    {
+      &#34;CountryName&#34;: &#34;Canada&#34;,
+      &#34;Language&#34;: &#34;English&#34;
+    },
+    ...
+    {
+      &#34;CountryName&#34;: &#34;Canada&#34;,
+      &#34;Language&#34;: &#34;Chinese&#34;
+    },
+    {
+      &#34;CountryName&#34;: &#34;Canada&#34;,
+      &#34;Language&#34;: &#34;Eskimo Languages&#34;
+    },
+    {
+      &#34;CountryName&#34;: &#34;Canada&#34;,
+      &#34;Language&#34;: &#34;Punjabi&#34;
+    }
+  ]
+}
+</code></pre></div></p><hr><h4 id=post---apiaddlanguage>POST /api/AddLanguage</h4><p>範例：新增n筆Language資料</p><pre tabindex=0><code>http://localhost:3000/api/AddLanguage
+</code></pre><p>POST帶的Body如下，為一個json含有多筆要新增的資料<div class=collapsable-code><input id=789124635 type=checkbox>
+<label for=789124635><span class=collapsable-code__language>json</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-json><code>
+[
+    {
+        &#34;Language_id&#34;: 500,
+        &#34;Language&#34;: &#34;Test500&#34;
+    },
+    {
+        &#34;Language_id&#34;: 501,
+        &#34;Language&#34;: &#34;Test501&#34;
+    }
+]
+</code></pre></div></p><p>當有Request戳到<code>POST /api/AddLanguage</code>時，會執行<code>AddLanguage()</code>這個HandleFunc()</p><p>這裡使用<code>Bind(&m)</code>將body內的json給parse到structure之中</p><div class=collapsable-code><input id=673198542 type=checkbox>
+<label for=673198542><span class=collapsable-code__language>go</span>
+<span class=collapsable-code__title>controllers/language-controller.go</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-go><code>
+func AddLanguage(c *gin.Context) {
+	var m []database.Languages
+	c.Bind(&amp;m)
+	rowsAffected, err := services.InsertLanguage(m)
+	if err != nil {
+		c.JSON(200, gin.H{&#34;message&#34;: err.Error()})
+	} else {
+		c.JSON(200, gin.H{&#34;message&#34;: &#34;success&#34;, &#34;rowsAffected&#34;: rowsAffected})
+	}
+}
+</code></pre></div><hr><h4 id=delete-apideletelanguagelanguage>DELETE /api/DeleteLanguage/:language</h4><p>範例：刪除所有Language=Test500的資料</p><pre tabindex=0><code>http://localhost:3000/api/RemoveLanguage/Test501
+</code></pre><p>當有Request戳到<code>DELETE /api/DeleteLanguage/:language</code>時，會執行<code>RemoveLanguage()</code>這個HandleFunc()</p><p>這裡與前面查詢取得URL參數的方法相同，一樣使用<code>c.Param()</code></p><div class=collapsable-code><input id=239651487 type=checkbox>
+<label for=239651487><span class=collapsable-code__language>go</span>
+<span class=collapsable-code__title>controllers/language-controller.go</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-go><code>
+func RemoveLanguage(c *gin.Context) {
+	queryId := c.Param(&#34;language&#34;)
+	rowsAffected, err := services.DeleteLanguage(queryId)
+	if err != nil {
+		c.JSON(200, gin.H{&#34;message&#34;: err.Error()})
+	} else {
+		var mesg string
+		if rowsAffected == 0 {
+			mesg = &#34;Language not found&#34;
+		} else {
+			mesg = &#34;success&#34;
+		}
+		c.JSON(200, gin.H{&#34;message&#34;: mesg, &#34;rowsAffected&#34;: rowsAffected})
+	}
+}
+</code></pre></div><hr><h4 id=put----apiupdatalanguage>PUT /api/UpdataLanguage</h4><p>範例：更新Language_id=xxx的資料</p><pre tabindex=0><code>http://localhost:3000/api/UpdateLanguage
+</code></pre><p>POST帶的Body如下，為一個json表示要將Language_id=500的資料更新成"Updated500"<div class=collapsable-code><input id=359248671 type=checkbox>
+<label for=359248671><span class=collapsable-code__language>json</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-json><code>
+{
+    &#34;Language_id&#34;: 500,
+    &#34;Language&#34;: &#34;Updated500&#34;
+}
+</code></pre></div></p><p>當有Request戳到<code>PUT /api/UpdataLanguage</code>時，會執行<code>UpdateLanguage()</code>這個HandleFunc()</p><p>這裡與前面新增資料時的方法相同，一樣使用<code>c.Bind(&m)</code>把json給parse到structure之中</p><div class=collapsable-code><input id=375962481 type=checkbox>
+<label for=375962481><span class=collapsable-code__language>go</span>
+<span class=collapsable-code__title>controllers/language-controller.go</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-go><code>
+func UpdateLanguage(c *gin.Context) {
+	var m database.Languages
+	c.Bind(&amp;m)
+	rowsAffected, err := services.UpdateLanguage(m)
+	if err != nil {
+		c.JSON(200, gin.H{&#34;message&#34;: err.Error()})
+	} else {
+		c.JSON(200, gin.H{&#34;message&#34;: &#34;success&#34;, &#34;rowsAffected&#34;: rowsAffected})
+	}
+}
+</code></pre></div><hr><p>以上就是用Gin來開發一個的API的簡單範例～</p><p>下一篇文章考慮記錄一下我使用Github Action自動化，將這個API部署到Azure k8s的方式。</p><p>敬請期待～～</p></div><div class=pagination><div class=pagination__title><span class=pagination__title-h>Read other posts</span><hr></div><div class=pagination__buttons><span class="button previous"><a href=/post/github-action-with-azure-k8s/><span class=button__icon>←</span>
+<span class=button__text>Github Action自動化部署到kubernetes</span></a></span>
+<span class="button next"><a href=/post/golang-restful-api/><span class=button__text>使用Golang來寫一個RESTful API</span>
+<span class=button__icon>→</span></a></span></div></div><div id=disqus_thread></div><script type=application/javascript>window.disqus_config=function(){},function(){if(["localhost","127.0.0.1"].indexOf(window.location.hostname)!=-1){document.getElementById("disqus_thread").innerHTML="Disqus comments not available by default when the website is previewed locally.";return}var t=document,e=t.createElement("script");e.async=!0,e.src="//zi-shane-github-io.disqus.com/embed.js",e.setAttribute("data-timestamp",+new Date),(t.head||t.body).appendChild(e)}()</script><noscript>Please enable JavaScript to view the <a href=https://disqus.com/?ref_noscript>comments powered by Disqus.</a></noscript><a href=https://disqus.com class=dsq-brlink>comments powered by <span class=logo-disqus>Disqus</span></a></div></div><footer class=footer><div class=footer__inner><a href=/ class=logo style=text-decoration:none><span class=logo__mark><svg xmlns="http://www.w3.org/2000/svg" class="greater-icon" viewBox="0 0 44 44"><path fill="none" d="M15 8l14.729 14.382L15 35.367"/></svg></span><span class=logo__text>hello friend</span>
+<span class=logo__cursor></span></a><div class=copyright><span>© 2022 Powered by
+<a href=https://gohugo.io target=_blank rel=noopener>Hugo</a></span>
+<span>Theme created by
+<a href=https://twitter.com/panr target=_blank rel=noopener>panr</a></span></div></div></footer><script src=/assets/main.js></script>
+<script src=/assets/prism.js></script></div><script type=application/javascript>var doNotTrack=!1;doNotTrack||(function(e,t,n,s,o,i,a){e.GoogleAnalyticsObject=o,e[o]=e[o]||function(){(e[o].q=e[o].q||[]).push(arguments)},e[o].l=1*new Date,i=t.createElement(n),a=t.getElementsByTagName(n)[0],i.async=1,i.src=s,a.parentNode.insertBefore(i,a)}(window,document,"script","https://www.google-analytics.com/analytics.js","ga"),ga("create","UA-122716411-1","auto"),ga("send","pageview"))</script></body></html>

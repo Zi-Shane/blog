@@ -1,0 +1,234 @@
+<!doctype html><html lang=en><head><title>Github Action自動化部署到kubernetes ::
+Hello Friend — A simple theme for Hugo</title><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=description content="目標 我的程式架構如下圖所示，Clent可以通過api來讀寫資料庫中的資料，本文章的目標是將backend部署到kubernetes上的過程交由Github Action自動化完成。
+一般來說database屬於Stateful的Application不太需要重啟，所以database的部分我採用手動的方式來管理（database不會隨著backend程式的重新部署而重啟），MariaDB的部署請參考這篇的步驟。因此這篇文章主要是討論backend的部分要如何在release新版本時，觸發Github Action自動化部署到新版本到Azure Kubernetes Cluster上。
+想要嘗試看看本文的說明的話，程式碼在這邊有興趣可以跟著操作看看。
+前置準備 Azure環境 架設Container Registry、架設kubernetes參考官方教學文件(1-3步驟)完成即可 Github Action 建立一個Github Repository 架構圖與流程 大致流程如下，設定使用者在github增加了新的release時，Github Action會將release的程式碼進行build image、上傳image到Registry、最後將app部署到kubernetes
+簡單來說就是把原本手動deploy到k8s上的這個過程給自動化，可以大大減少手動操作的麻煩
+手動部署 再開始自動化之前，先來看看手動部署會需要做哪些步驟：
+step1. Build &amp;amp; Push the container image 第一步要將程式包成image並將其上傳到Registry，因此需要先寫好Dockerfile。而中間的docker login是只有在第一次登入Registry的時候才需要的。
+docker build -t tgbotreg.azurecr.io/api-backend:v1.0 . docker login tgbotreg.azurecr.io docker push tgbotreg.azurecr.io/api-backend:v1.0 這裡附上我的Dockerfile，裡頭有使用到multi-stage build的方式，前半部是做compile的動作，而後半部是把編譯好的binary給包進image，這樣做可以只保留編譯完成的binary來包成image，可以減少image的大小。
+Dockerfile # Compile code FROM docker.io/library/golang:alpine as builder WORKDIR /app COPY . . RUN go mod download &amp;amp;&amp;amp;\ go build -o app # Build image by compiled binary FROM docker."><meta name=keywords content><meta name=robots content="noodp"><link rel=canonical href=/post/github-action-with-azure-k8s/><link rel=stylesheet href=/assets/style.css><link rel=stylesheet href=/style.css><link rel=apple-touch-icon-precomposed sizes=144x144 href=/img/apple-touch-icon-144-precomposed.png><link rel="shortcut icon" href=/img/favicon.png><link href=/assets/fonts/Inter-Italic.woff2 rel=preload type=font/woff2 as=font crossorigin><link href=/assets/fonts/Inter-Regular.woff2 rel=preload type=font/woff2 as=font crossorigin><link href=/assets/fonts/Inter-Medium.woff2 rel=preload type=font/woff2 as=font crossorigin><link href=/assets/fonts/Inter-MediumItalic.woff2 rel=preload type=font/woff2 as=font crossorigin><link href=/assets/fonts/Inter-Bold.woff2 rel=preload type=font/woff2 as=font crossorigin><link href=/assets/fonts/Inter-BoldItalic.woff2 rel=preload type=font/woff2 as=font crossorigin><meta name=twitter:card content="summary"><meta name=twitter:title content="Github Action自動化部署到kubernetes"><meta name=twitter:description content="使用Github Action自動化部署到Azure kubernetes Cluster"><meta property="og:title" content="Github Action自動化部署到kubernetes"><meta property="og:description" content="使用Github Action自動化部署到Azure kubernetes Cluster"><meta property="og:type" content="article"><meta property="og:url" content="/post/github-action-with-azure-k8s/"><meta property="article:section" content="post"><meta property="article:published_time" content="2021-12-21T00:00:00+00:00"><meta property="article:modified_time" content="2021-12-21T00:00:00+00:00"><meta property="og:site_name" content="Hello Friend"></head><body><div class=container><header class=header><span class=header__inner><a href=/ class=logo style=text-decoration:none><span class=logo__mark><svg xmlns="http://www.w3.org/2000/svg" class="greater-icon" viewBox="0 0 44 44"><path fill="none" d="M15 8l14.729 14.382L15 35.367"/></svg></span><span class=logo__text>hello friend</span>
+<span class=logo__cursor></span></a>
+<span class=header__right><nav class=menu><ul class="menu__inner menu__inner--desktop"><li><a href=/about>About</a></li><li><a href=/tags>Tags</a></li></ul><ul class="menu__inner menu__inner--mobile"><li><a href=/about>About</a></li><li><a href=/tags>Tags</a></li></ul></nav><span class=menu-trigger><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M0 0h24v24H0z" fill="none"/><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg></span><span class=theme-toggle><svg class="theme-toggler" width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M22 41c10.4934.0 19-8.5066 19-19C41 11.5066 32.4934 3 22 3 11.5066 3 3 11.5066 3 22s8.5066 19 19 19zM7 22C7 13.7157 13.7157 7 22 7V37C13.7157 37 7 30.2843 7 22z"/></svg></span></span></span></header><div class=content><div class=post><h1 class=post-title>Github Action自動化部署到kubernetes</h1><div class=post-meta><span class=post-date>2021-12-21</span>
+<span class=post-author>— Written by Zi-Shane</span></div><span class=post-tags><a href=/tags/kubernetes/>#kubernetes</a>&nbsp;
+<a href=/tags/ci/cd/>#CI/CD</a>&nbsp;
+<a href=/tags/github-action/>#Github Action</a>&nbsp;</span><div class=post-content><h2 id=目標>目標</h2><p>我的程式架構如下圖所示，Clent可以通過api來讀寫資料庫中的資料，本文章的目標是將backend部署到kubernetes上的過程交由Github Action自動化完成。</p><p><img src=https://i.imgur.com/lNeXLJZ.png alt></p><p>一般來說database屬於Stateful的Application不太需要重啟，所以database的部分我採用手動的方式來管理（database不會隨著backend程式的重新部署而重啟），<a href=https://hackmd.io/@7X5kamZwR8yXzSdJtG50Fg/HJ-afK49F>MariaDB的部署請參考這篇的步驟</a>。因此這篇文章主要是討論backend的部分要如何在release新版本時，觸發Github Action自動化部署到新版本到Azure Kubernetes Cluster上。</p><p>想要嘗試看看本文的說明的話，程式碼在<a href=https://github.com/Zi-Shane/api-project/tree/v1.0.1>這邊</a>有興趣可以跟著操作看看。</p><hr><h2 id=前置準備>前置準備</h2><ul><li>Azure環境<ul><li>架設Container Registry、架設kubernetes參考<a href="https://docs.microsoft.com/en-us/azure/aks/tutorial-kubernetes-prepare-acr?tabs=azure-cli">官方教學文件(1-3步驟)</a>完成即可</li></ul></li><li>Github Action<ul><li>建立一個Github Repository</li></ul></li></ul><hr><h2 id=架構圖與流程>架構圖與流程</h2><p>大致流程如下，設定使用者在github增加了新的release時，Github Action會將release的程式碼進行build image、上傳image到Registry、最後將app部署到kubernetes</p><p>簡單來說就是把原本手動deploy到k8s上的這個過程給自動化，可以大大減少手動操作的麻煩</p><p><img src=https://i.imgur.com/lwxkZiv.png alt></p><hr><h2 id=手動部署>手動部署</h2><p>再開始自動化之前，先來看看手動部署會需要做哪些步驟：</p><h3 id=step1-build--push-the-container-image>step1. Build & Push the container image</h3><p>第一步要將程式包成image並將其上傳到Registry，因此需要先寫好Dockerfile。而中間的<code>docker login</code>是只有在第一次登入Registry的時候才需要的。</p><pre tabindex=0><code>docker build -t tgbotreg.azurecr.io/api-backend:v1.0 .
+docker login tgbotreg.azurecr.io
+docker push tgbotreg.azurecr.io/api-backend:v1.0
+</code></pre><p>這裡附上我的Dockerfile，裡頭有使用到multi-stage build的方式，前半部是做compile的動作，而後半部是把編譯好的binary給包進image，這樣做可以只保留編譯完成的binary來包成image，可以減少image的大小。</p><div class=collapsable-code><input id=365842791 type=checkbox>
+<label for=365842791><span class=collapsable-code__language>Dockerfile</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-Dockerfile><code>
+# Compile code
+FROM docker.io/library/golang:alpine as builder
+WORKDIR /app
+
+COPY . .
+RUN go mod download &amp;&amp;\
+    go build -o app
+
+# Build image by compiled binary
+FROM docker.io/library/alpine
+WORKDIR /app
+COPY --from=builder /app/app .
+
+EXPOSE 3000
+
+ENTRYPOINT [&#34;./app&#34;]
+</code></pre></div><h3 id=step2-deploy-container-to-the-kubernetes-cluster>step2. Deploy container to the kubernetes cluster</h3><p>有了image之後就可以丟到k8s上執行了，我使用kustomize來管理yaml，因此準備以下兩的檔案，將其放在同個資料夾中。</p><ul><li><code>api-yamls/api-deploy.yaml</code>: 包含deployment、service</li><li><code>api-yamls/kustomization.yaml</code>: namespace和自動生成secret(database的連線資訊)</li></ul><p>接著可以下這個指令<code>kubectl kustomize ./</code>就可以看到自動產生的secret和namesapce已經被加入到原本的deployment、service之中了。</p><p>kustomize會自動根據<code>kustomization.yaml</code>自動生成secret和插入namespace到<code>api-deploy.yaml</code>之中。自動生成secret的好處是不用自己轉base64以及避免機密資訊上傳到github上。而另一個好處是透過這種方式可以很方便地將同個服務的資源給綁在一起，不用說deployment、service每個的namespace都要一個個改，比不容易出錯。</p><p>kustomize內建在kubectl中，直接使用以下指令來deploy</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span><span style=color:#75715e># deploy</span>
+</span></span><span style=display:flex><span>kubectl apply -k ./
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e># delete</span>
+</span></span><span style=display:flex><span>kubectl delete -k ./
+</span></span></code></pre></div><div class=collapsable-code><input id=152987436 type=checkbox>
+<label for=152987436><span class=collapsable-code__language>yaml</span>
+<span class=collapsable-code__title>api-yamls/api-deploy.yaml</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-yaml><code>
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-backend  # Service name
+spec:
+  type: LoadBalancer  # 使用cloud的loadbalancer分配ip
+  ports:
+  - port: 3000  # Service開放的port (預設target port也會被設為相同)
+  selector:
+    app: api-backend  # 此Service作用於哪些pod的
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-backend-deploy  # Deployment name
+spec:
+  replicas: 1  # 此Deployment要維持幾個pod
+  selector:
+    matchLabels:
+      app: api-backend
+  template:
+    metadata:
+      labels:
+        app: api-backend
+    spec:
+      nodeSelector:
+        &#34;beta.kubernetes.io/os&#34;: linux
+      containers:
+      - name: api-backend
+        image: tgbotreg.azurecr.io/api-backend:v1.0
+        env:
+        - name: DB_CONN  # ENV in container
+          valueFrom:
+            secretKeyRef:
+              name: mariadb-conn  # 哪個secret
+              key: dbconn  # secret中的哪個key
+        ports:
+        - containerPort: 3000
+          name: api-port
+</code></pre></div><div class=collapsable-code><input id=381967425 type=checkbox>
+<label for=381967425><span class=collapsable-code__language>yaml</span>
+<span class=collapsable-code__title>api-yamls/kustomization.yaml</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-yaml><code>
+secretGenerator:
+- name: mariadb-conn
+  literals:
+  - dbconn=root:yourpassword@tcp(api-mariadb:3306)/nation
+
+resources:
+  - api-deploy.yaml
+namespace: api-backend  # 加入namespace到resource指定的yaml中
+</code></pre></div><p>以上就是每次deploy時要做的動作，接下來就要將這些全部改為自動化～</p><hr><h2 id=github-action自動化>Github Action自動化</h2><p>在前面手動部署的步驟中我們是使用kubstomize來管理yaml，好處是可以把機密資訊分開保存(secret跟deployment)，如果要自動化的話一樣需要有secret程式才能正確執行，但我們不想把secret的內容公開到github上，因此secret的部分還是以手動的方式部署到k8s中。</p><h3 id=step1-deploy-db-connection-password-as-secret-to-k8s>step1: Deploy DB connection password as secret to k8s</h3><p>使用<code>kubectl kustomize ./</code>可以看到kustomize生成的yaml，把其中secret的部分複製下來存到訂一個檔案<code>secret.yaml</code>，記得不要公開到github上！！</p><div class=collapsable-code><input id=231479586 type=checkbox>
+<label for=231479586><span class=collapsable-code__language>yaml</span>
+<span class=collapsable-code__title>manifests/secret.yaml</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-yaml><code>
+apiVersion: v1
+data:
+  dbconn: cm9vdDphYmJjY2NkZGRkQHRjcChhcGktbWFyaWFkYjozMzA2KS9uYXRpb24=
+kind: Secret
+metadata:
+  name: mariadb-conn
+  namespace: api-backend
+type: Opaque
+</code></pre></div><p>最後執行以下指令，將secret先部署到k8s中</p><pre tabindex=0><code>kubectl apply -f manifests/secret.yaml
+</code></pre><hr><h3 id=step2-設定github-action的workflow>step2: 設定Github Action的workflow</h3><p>直接看下方的workflow，可以看到<code>jobs.build.steps</code>，做了以下幾件事：</p><ul><li>Connect to Azure Container Registry (ACR)</li><li>Container image build and push to a Azure Container Registry (ACR)</li><li>Set the target Azure Kubernetes Service (AKS) cluster</li><li>Create namespace</li><li>Replace image name and tag in deployment.yml</li><li>Deploy app to AKS</li></ul><p>其實就是把前面手動的步驟自動化，自動化可以想成有人開了一台VM幫你<code>git clone</code>你的repo程式碼並且build它。
+Github Action會自動檢查<code>.github/workflow/xxx.yaml</code>底下的workflow，只要push到你的repo上，當滿足觸發workflow的條件時，他就會自動執行。</p><ul><li><code>on</code>: 觸發workflow的條件</li><li><code>env</code>: 環境變數，可以使用帶入變數的方式方便撰寫和管理workflow</li><li><code>jobs</code>: 就是workflow實際上要做的事情</li></ul><p><code>jobs.build.steps.use</code>是使用<a href=https://github.com/marketplace>marketplace</a>上別人寫好的模組功能。
+而<code>jobs.build.steps.run</code>則是直接執行指令。</p><p>因此過程中同樣會build image，所以需要Dockerfile、deployment用的yaml。這些檔案分別放在以下路徑</p><pre tabindex=0><code>./Dockerfile
+manifests/deployment.yaml
+manifests/service.yaml
+.github/workflow/deploy-to-azure.yaml
+</code></pre><p><code>manifests/deployment.yaml</code>和<code>manifests/service.yaml</code>是使用<code>kubectl kustomize ./</code>的結果，其中的imge改成<code>tgbotreg.azurecr.io/api-backend:LATEST_TAG</code>，因為每次tag都會不同，所以workflow過程中會把<code>LATEST_TAG</code>替換成新的tag。</p><div class=collapsable-code><input id=295461378 type=checkbox>
+<label for=295461378><span class=collapsable-code__language>yaml</span>
+<span class=collapsable-code__title>.github/workflows/deploy-to-azure.yaml</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-yaml><code>
+```yaml
+# Event that trigger this workflow
+on: 
+  release:
+    types: [published, edited]
+    branches:
+      - main
+
+# Environment variables available to all jobs and steps in this workflow
+env:
+  REGISTRY_NAME: tgbotReg
+  CLUSTER_NAME: tgbot
+  CLUSTER_RESOURCE_GROUP: Telegram-Bot
+  NAMESPACE: api-backend
+  APP_NAME: api-backend
+  
+jobs:
+  build:  # jobs name (defined by your self)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@main
+    
+    # Connect to Azure Container Registry (ACR)
+    - uses: azure/docker-login@v1
+      with:
+        login-server: ${{ env.REGISTRY_NAME }}.azurecr.io
+        username: ${{ secrets.REGISTRY_USERNAME }} 
+        password: ${{ secrets.REGISTRY_PASSWORD }}
+    
+    # Container build and push to a Azure Container Registry (ACR)
+    - run: |
+        docker build . -t ${{ env.REGISTRY_NAME }}.azurecr.io/${{ env.APP_NAME }}:${{ github.sha }}
+        docker push ${{ env.REGISTRY_NAME }}.azurecr.io/${{ env.APP_NAME }}:${{ github.sha }}
+    
+    # Set the target Azure Kubernetes Service (AKS) cluster. 
+    - uses: azure/aks-set-context@v1
+      with:
+        creds: &#39;${{ secrets.AZURE_CREDENTIALS }}&#39;
+        cluster-name: ${{ env.CLUSTER_NAME }}
+        resource-group: ${{ env.CLUSTER_RESOURCE_GROUP }}
+    
+    # Create namespace if doesn&#39;t exist
+    - run: |
+        kubectl create namespace ${{ env.NAMESPACE }} --dry-run=client -o json | kubectl apply -f -
+    
+    # Replace image tag in deployment.yml
+    - run: |
+        sed -i &#34;s/LATEST_TAG/${{ github.sha }}/&#34; manifests/deployment.yml
+    
+    # Deploy app to AKS
+    - uses: azure/k8s-deploy@v1
+      with:
+        manifests: |
+          manifests/deployment.yml
+          manifests/service.yml
+        images: |
+          ${{ env.REGISTRY_NAME }}.azurecr.io/${{ env.APP_NAME }}:${{ github.sha }}
+        # imagepullsecrets: |
+        #   ${{ env.SECRET }}
+        namespace: ${{ env.NAMESPACE }}
+</code></pre></div><p>這裡還是附上<code>manifests/deployment.yaml</code>和<code>manifests/service.yaml</code></p><div class=collapsable-code><input id=239645718 type=checkbox checked>
+<label for=239645718><span class=collapsable-code__language>yaml</span>
+<span class=collapsable-code__title>manifests/deployment.yaml</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-yaml><code>
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-backend-deploy
+  namespace: api-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-backend
+  template:
+    metadata:
+      labels:
+        app: api-backend
+    spec:
+      containers:
+      - env:
+        - name: DB_CONN
+          valueFrom:
+            secretKeyRef:
+              key: dbconn
+              name: mariadb-conn
+        image: tgbotreg.azurecr.io/api-backend:LATEST_TAG
+        name: api-backend
+        ports:
+        - containerPort: 3000
+          name: api-port
+      nodeSelector:
+        beta.kubernetes.io/os: linux
+</code></pre></div><div class=collapsable-code><input id=785491623 type=checkbox checked>
+<label for=785491623><span class=collapsable-code__language>yaml</span>
+<span class=collapsable-code__title>manifests/service.yaml</span>
+<span class=collapsable-code__toggle data-label-expand=△ data-label-collapse=▽></span></label><pre class=language-yaml><code>
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-backend
+  namespace: api-backend
+spec:
+  ports:
+  - port: 3000
+  selector:
+    app: api-backend
+  type: LoadBalancer
+</code></pre></div><hr><h2 id=參考資料>參考資料</h2><ul><li><a href=https://docs.microsoft.com/en-us/azure/aks/kubernetes-action>https://docs.microsoft.com/en-us/azure/aks/kubernetes-action</a></li><li><a href=https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/>https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/</a></li><li><a href="https://docs.microsoft.com/en-us/azure/aks/tutorial-kubernetes-prepare-acr?tabs=azure-cli">https://docs.microsoft.com/en-us/azure/aks/tutorial-kubernetes-prepare-acr?tabs=azure-cli</a></li></ul></div><div class=pagination><div class=pagination__title><span class=pagination__title-h>Read other posts</span><hr></div><div class=pagination__buttons><span class="button next"><a href=/post/golang-restful-api-part2/><span class=button__text>使用Golang來寫一個RESTful API - Part2</span>
+<span class=button__icon>→</span></a></span></div></div><div id=disqus_thread></div><script type=application/javascript>window.disqus_config=function(){},function(){if(["localhost","127.0.0.1"].indexOf(window.location.hostname)!=-1){document.getElementById("disqus_thread").innerHTML="Disqus comments not available by default when the website is previewed locally.";return}var t=document,e=t.createElement("script");e.async=!0,e.src="//zi-shane-github-io.disqus.com/embed.js",e.setAttribute("data-timestamp",+new Date),(t.head||t.body).appendChild(e)}()</script><noscript>Please enable JavaScript to view the <a href=https://disqus.com/?ref_noscript>comments powered by Disqus.</a></noscript><a href=https://disqus.com class=dsq-brlink>comments powered by <span class=logo-disqus>Disqus</span></a></div></div><footer class=footer><div class=footer__inner><a href=/ class=logo style=text-decoration:none><span class=logo__mark><svg xmlns="http://www.w3.org/2000/svg" class="greater-icon" viewBox="0 0 44 44"><path fill="none" d="M15 8l14.729 14.382L15 35.367"/></svg></span><span class=logo__text>hello friend</span>
+<span class=logo__cursor></span></a><div class=copyright><span>© 2022 Powered by
+<a href=https://gohugo.io target=_blank rel=noopener>Hugo</a></span>
+<span>Theme created by
+<a href=https://twitter.com/panr target=_blank rel=noopener>panr</a></span></div></div></footer><script src=/assets/main.js></script>
+<script src=/assets/prism.js></script></div><script type=application/javascript>var doNotTrack=!1;doNotTrack||(function(e,t,n,s,o,i,a){e.GoogleAnalyticsObject=o,e[o]=e[o]||function(){(e[o].q=e[o].q||[]).push(arguments)},e[o].l=1*new Date,i=t.createElement(n),a=t.getElementsByTagName(n)[0],i.async=1,i.src=s,a.parentNode.insertBefore(i,a)}(window,document,"script","https://www.google-analytics.com/analytics.js","ga"),ga("create","UA-122716411-1","auto"),ga("send","pageview"))</script></body></html>
